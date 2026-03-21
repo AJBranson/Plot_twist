@@ -2385,7 +2385,9 @@ function renderStats() {
       bsvBtn.textContent = 'Connected ✓';
       bsvBtn.style.background = 'var(--green-hi)';
       bsvBtn.style.color = '#0A1F06';
-      bsvBtn.disabled = true;
+      bsvBtn.disabled = false;
+      bsvBtn.title = 'Click to disconnect wallet';
+      bsvBtn.onclick = disconnectWallet;
     }
   } else {
     bsvStatus.textContent = 'Wallet: Local Mode';
@@ -2394,6 +2396,8 @@ function renderStats() {
       bsvBtn.style.background = '';
       bsvBtn.style.color = '';
       bsvBtn.disabled = false;
+      bsvBtn.title = '';
+      bsvBtn.onclick = connectWallet;
     }
   }
 }
@@ -2979,6 +2983,7 @@ const MERCHANT_DEALS = [
       const discountPct = [20, 25, 30, 40][Math.floor(Math.random() * 4)];
       const dealPrice = Math.max(1, Math.floor(fullPrice * (1 - discountPct / 100)));
       return {
+        typeId: 'seed_discount',
         cropId: crop.id,
         qty,
         fullPrice,
@@ -3002,6 +3007,9 @@ const MERCHANT_DEALS = [
       const bonus = (Math.floor(Math.random() * 4) + 2) * 5; // 10-30 coins
       const cost = Math.max(3, Math.floor(bonus * 0.6));
       return {
+        typeId: 'buy_coins',
+        cost,
+        bonus,
         offerText: 'Lucky charm! Pay 🪙' + cost + ' now, receive 🪙' + bonus + ' back instantly.',
         btnText: 'Buy 🪙' + cost,
         canAfford: () => G.coins >= cost,
@@ -3019,6 +3027,9 @@ const MERCHANT_DEALS = [
       const xpGain = (Math.floor(Math.random() * 4) + 2) * 10; // 20-50
       const cost = Math.max(4, Math.floor(xpGain * 0.4));
       return {
+        typeId: 'xp_boost',
+        cost,
+        xpGain,
         offerText: 'Ancient almanac! Pay 🪙' + cost + ' for +'  + xpGain + ' XP immediately.',
         btnText: 'Study (🪙' + cost + ')',
         canAfford: () => G.coins >= cost,
@@ -3044,6 +3055,9 @@ const MERCHANT_DEALS = [
       const growingCount = G.plots.filter(p => p.cropId && !p.ready).length;
       const cost = Math.max(5, growingCount * 3);
       return {
+        typeId: 'speed_tonic',
+        cost,
+        pct,
         offerText: 'Growth tonic! Pay 🪙' + cost + ' to speed all growing crops up by ' + pct + '% instantly.',
         btnText: 'Buy tonic (🪙' + cost + ')',
         canAfford: () => G.coins >= cost,
@@ -3156,13 +3170,69 @@ function restoreMerchantIfActive() {
     G.merchantActive = false;
     return;
   }
-  // Rebuild the deal object from saved data (execute fn is gone — re-create a basic one)
-  // We don't reconstruct execute; instead just show the banner so user can pass
+
+  const d = G.merchantDeal;
+
+  // Reconstruct canAfford and execute from saved params
+  switch (d.typeId) {
+    case 'seed_discount':
+      window._merchantCanAfford = () => G.coins >= d.dealPrice;
+      window._merchantExecute = () => {
+        G.coins -= d.dealPrice;
+        G.inventory[d.cropId] = (G.inventory[d.cropId] || 0) + d.qty;
+        notify('🛒 Got ' + d.qty + '× ' + CROP_MAP[d.cropId].name + ' at −' + d.discountPct + '%!', 'unlock');
+      };
+      break;
+    case 'buy_coins':
+      window._merchantCanAfford = () => G.coins >= d.cost;
+      window._merchantExecute = () => {
+        G.coins += (d.bonus - d.cost);
+        notify('🍀 Lucky charm! +🪙' + (d.bonus - d.cost) + ' net gain!', 'unlock');
+      };
+      break;
+    case 'xp_boost':
+      window._merchantCanAfford = () => G.coins >= d.cost;
+      window._merchantExecute = () => {
+        G.coins -= d.cost;
+        G.totalXP += d.xpGain;
+        const prev = G.level;
+        checkLevelUp();
+        notify('📚 +' + d.xpGain + ' XP from the almanac!', 'harvest');
+        if (G.level > prev) {
+          const ld = getLevelData(G.level);
+          setTimeout(() => notify('🎉 Level Up! ' + ld.title + ' (Lv' + G.level + ')!', 'levelup'), 300);
+        }
+      };
+      break;
+    case 'speed_tonic':
+      window._merchantCanAfford = () => G.coins >= d.cost;
+      window._merchantExecute = () => {
+        G.coins -= d.cost;
+        let boosted = 0;
+        G.plots.forEach(p => {
+          if (p.cropId && p.plantedAt && !p.ready) {
+            const crop = CROP_MAP[p.cropId];
+            const elapsed = Date.now() - p.plantedAt;
+            const remaining = Math.max(0, crop.gameSecs * 1000 - elapsed);
+            p.plantedAt -= Math.floor(remaining * (d.pct / 100));
+            boosted++;
+          }
+        });
+        saveGame(); renderPlots();
+        notify('🧪 Tonic boosted ' + boosted + ' crop' + (boosted !== 1 ? 's' : '') + ' by ' + d.pct + '%!', 'harvest');
+      };
+      break;
+    default:
+      // Unknown deal type — show banner but disable button
+      window._merchantExecute = null;
+      window._merchantCanAfford = null;
+  }
+
   document.getElementById('merchant-title').textContent = '🧙 Wandering Merchant';
-  document.getElementById('merchant-offer').textContent = G.merchantDeal.offerText || 'Special offer available!';
+  document.getElementById('merchant-offer').textContent = d.offerText || 'Special offer available!';
   const dealBtn = document.getElementById('merchant-deal-btn');
-  dealBtn.textContent = G.merchantDeal.btnText || 'Deal';
-  dealBtn.disabled = true; // can't re-execute after reload without fn — just let it expire
+  dealBtn.textContent = d.btnText || 'Take Deal';
+  dealBtn.disabled = !window._merchantCanAfford || !window._merchantCanAfford();
   document.getElementById('merchant-banner').classList.remove('hidden');
 }
 
@@ -3517,6 +3587,15 @@ function connectWallet() {
     notify('🔧 Dev mode: BSV not available. Use coins!', 'error');
     setPlayerState('anonymous');
   }
+}
+
+function disconnectWallet() {
+  if (!confirm('Disconnect your BSV wallet?\n\nYou can reconnect any time by clicking Connect.')) return;
+  G.walletConnected = false;
+  G.walletAddress = null;
+  saveGame();
+  renderAll();
+  notify('🔌 Wallet disconnected.', 'error');
 }
 
 function setPlayerState(state) {
