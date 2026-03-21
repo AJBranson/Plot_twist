@@ -9,7 +9,7 @@ a prestige system keep every session feeling fresh.
 
 ## Play the Game
 
-👉 [Play Plot Twist](https://ajbranson.github.io/plot_twist/)
+👉 [Play Plot Twist](https://ajbranson.github.io/Plot_twist/)
 
 ## Features
 
