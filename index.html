@@ -897,8 +897,31 @@ button:active { transform: scale(0.95); }
 }
 
 /* ============================================================
-   RANDOM EVENT MODAL
+   IN-GAME CONFIRM MODAL
    ============================================================ */
+#confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 450;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fade-in 0.2s ease;
+}
+#confirm-overlay.hidden { display: none; }
+
+#confirm-card {
+  background: linear-gradient(160deg, #182B14 0%, #111D0F 100%);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  animation: card-pop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
 #event-overlay {
   position: fixed;
   inset: 0;
@@ -1489,6 +1512,18 @@ button:active { transform: scale(0.95); }
     <div class="event-title" id="event-title"></div>
     <div class="event-desc"  id="event-desc"></div>
     <div class="event-btns" id="event-btns"></div>
+  </div>
+</div>
+
+<!-- In-game Confirm Modal (replaces browser confirm() blocked in iframe) -->
+<div id="confirm-overlay" class="hidden">
+  <div id="confirm-card">
+    <div class="event-title" id="confirm-title"></div>
+    <div class="event-desc"  id="confirm-desc"></div>
+    <div class="event-btns">
+      <button class="event-btn-primary"   id="confirm-ok">Confirm</button>
+      <button class="event-btn-secondary" onclick="closeConfirm()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -3597,7 +3632,6 @@ function connectWallet() {
 }
 
 function disconnectWallet() {
-  if (!confirm('Disconnect your BSV wallet?\n\nYou can reconnect any time by clicking Connect.')) return;
   G.walletConnected = false;
   G.walletAddress = null;
   saveGame();
