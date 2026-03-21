@@ -1539,7 +1539,7 @@ button:active { transform: scale(0.95); }
 //   3.3 = design speed  (~1.5 min radish)
 //   1.0 = fast testing  (~27 sec radish)
 //   0.1 = ultra-fast    (~3 sec radish)
-const SECS_PER_DAY = 0.3;
+const SECS_PER_DAY = 3.3;
 
 const CROPS = [
   { id:'radish',      name:'Radish',      days:27,  speed:'Fast',   seedCost:2,  sellPrice:8,  xp:5,   unlockLevel:1 },
@@ -2378,10 +2378,23 @@ function renderStats() {
 
   // BSV status
   const bsvStatus = document.getElementById('bsv-status');
+  const bsvBtn = document.querySelector('#bsv-pill button');
   if (G.walletConnected) {
-    bsvStatus.textContent = '₿ ' + G.walletAddress.substring(0,8) + '…';
+    bsvStatus.textContent = '₿ ' + G.walletAddress.substring(0,10) + '…';
+    if (bsvBtn) {
+      bsvBtn.textContent = 'Connected ✓';
+      bsvBtn.style.background = 'var(--green-hi)';
+      bsvBtn.style.color = '#0A1F06';
+      bsvBtn.disabled = true;
+    }
   } else {
     bsvStatus.textContent = 'Wallet: Local Mode';
+    if (bsvBtn) {
+      bsvBtn.textContent = 'Connect';
+      bsvBtn.style.background = '';
+      bsvBtn.style.color = '';
+      bsvBtn.disabled = false;
+    }
   }
 }
 
@@ -3490,7 +3503,7 @@ function connectWallet() {
           G.walletConnected = true;
           G.walletAddress = data.payload.wallet.address;
           saveGame();
-          renderStats();
+          renderAll(); // re-render everything so BSV buttons activate
           notify('✅ Wallet connected!', 'unlock');
         } else {
           notify('👤 Running anonymously — coins only mode.', 'error');
