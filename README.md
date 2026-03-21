@@ -9,7 +9,7 @@ a prestige system keep every session feeling fresh.
 
 ## Play the Game
 
-👉 [Play Plot Twist](https://AJBranson.github.io/plot-twist/farming_game.html)
+👉 [Play Plot Twist](https://ajbranson.github.io/plot_twist/)
 
 ## Features
 
