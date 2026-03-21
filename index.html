@@ -515,6 +515,99 @@ button:active { transform: scale(0.95); }
 .can-splashing { animation: can-splash 0.5s ease forwards; }
 
 /* ============================================================
+   COMPOST PILE
+   ============================================================ */
+#compost-area {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#compost-btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+}
+#compost-btn:hover { transform: translateY(-2px) scale(1.05); }
+#compost-btn:active { transform: scale(0.93); }
+#compost-btn:disabled { cursor: not-allowed; opacity: 0.45; transform: none; filter: grayscale(0.6) drop-shadow(0 2px 6px rgba(0,0,0,0.3)); }
+
+#compost-info { flex: 1; min-width: 0; }
+
+#compost-label {
+  font-family: var(--ff-head);
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+#compost-status {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.compost-pips {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.compost-pip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(139,195,74,0.3);
+  background: rgba(255,255,255,0.05);
+  transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compost-pip.filled {
+  background: rgba(104,159,56,0.5);
+  border-color: #8BC34A;
+  box-shadow: 0 0 6px rgba(139,195,74,0.4);
+}
+
+/* Fertilised plot indicator badge */
+.plot-fertilised-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(104,159,56,0.85);
+  border: 1px solid #8BC34A;
+  border-radius: 6px;
+  font-size: 10px;
+  padding: 1px 5px;
+  font-weight: 800;
+  color: #F1F8E9;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Fertilise-target glow on plots */
+.plot-tile.fertilise-target .plot-visual {
+  border: 2px dashed #8BC34A !important;
+  box-shadow: 0 0 14px rgba(139,195,74,0.5);
+  animation: pulse-compost 1.4s ease-in-out infinite;
+}
+@keyframes pulse-compost {
+  0%, 100% { box-shadow: 0 0 8px rgba(139,195,74,0.3); }
+  50%       { box-shadow: 0 0 22px rgba(139,195,74,0.7); }
+}
+
+/* ============================================================
    SHOP SIDEBAR
    ============================================================ */
 #shop-sidebar {
@@ -1576,6 +1669,19 @@ button:active { transform: scale(0.95); }
           </div>
         </div>
       </div>
+
+      <!-- COMPOST PILE -->
+      <div id="compost-area">
+        <button id="compost-btn" onclick="toggleFertiliseMode()" title="Compost Pile"></button>
+        <div id="compost-info">
+          <div id="compost-label">
+            🌿 Compost Pile
+            <span style="font-size:10px;font-weight:700;color:var(--text-dim)">+25% sell value</span>
+          </div>
+          <div id="compost-status">Loading…</div>
+          <div class="compost-pips" id="compost-pips"></div>
+        </div>
+      </div>
     </section>
 
     <!-- SHOP SIDEBAR -->
@@ -2028,6 +2134,7 @@ const DEFAULT_STATE = {
     cropId: null,
     plantedAt: null,
     ready: false,
+    fertilised: false,  // +25% sell bonus on next harvest
   })),
   walletConnected: false,
   walletAddress: null,
@@ -2042,6 +2149,10 @@ const DEFAULT_STATE = {
   merchantExpiry: 0,     // ms timestamp when merchant leaves
 
   wateringCanLastUsed: 0, // ms timestamp — 0 = never used (starts full)
+
+  compostCharges: 5,       // 0-5 current charges; starts full
+  compostLastCharged: 0,   // ms timestamp when last charge was added
+  fertiliseMode: false,    // true when player is selecting a plot to fertilise
 };
 
 let G = null; // game state
@@ -2068,6 +2179,7 @@ function saveGame() {
         cropId: p.cropId,
         plantedAt: p.plantedAt,
         ready: p.ready,
+        fertilised: p.fertilised,
       })),
       walletConnected: G.walletConnected,
       walletAddress: G.walletAddress,
@@ -2079,6 +2191,8 @@ function saveGame() {
       merchantExpiry: G.merchantExpiry,
       merchantDeal: G.merchantDeal,
       wateringCanLastUsed: G.wateringCanLastUsed,
+      compostCharges: G.compostCharges,
+      compostLastCharged: G.compostLastCharged,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
   } catch(e) { console.warn('Save failed:', e); }
@@ -2107,10 +2221,13 @@ function loadGame() {
       G.merchantDeal   = saved.merchantDeal   ?? null;
       G.merchantActive = (saved.merchantDeal && saved.merchantExpiry > Date.now());
       G.wateringCanLastUsed = saved.wateringCanLastUsed ?? 0;
+      G.compostCharges    = saved.compostCharges    ?? 5;
+      G.compostLastCharged = saved.compostLastCharged ?? 0;
+      G.fertiliseMode = false;
       G.walletAddress = saved.walletAddress ?? null;
       if (saved.plots) {
         saved.plots.forEach((sp, i) => {
-          if (G.plots[i]) Object.assign(G.plots[i], sp);
+          if (G.plots[i]) Object.assign(G.plots[i], { ...sp, fertilised: sp.fertilised ?? false });
         });
       }
       G.selectedCrop = null;
@@ -2161,6 +2278,9 @@ function doPrestige() {
   G.level = 1;
   G.selectedCrop = null;
   G.shopExpanded = null;
+  G.fertiliseMode = false;
+  G.compostCharges = 5;
+  G.compostLastCharged = 0;
   G.inventory = {};
   G.plots = Array.from({length:20}, (_, i) => ({
     idx: i,
@@ -2389,7 +2509,9 @@ function harvestCrop(idx) {
   if (!plot.ready) return;
   const crop = CROP_MAP[plot.cropId];
 
-  const earnedCoins = applyEventModifiers(Math.floor(crop.sellPrice * prestigeMultiplier()));
+  const baseSell = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised ? 1.25 : 1));
+  const earnedCoins = applyEventModifiers(baseSell);
+  const wasFertilised = plot.fertilised;
   G.coins += earnedCoins;
   G.totalXP += crop.xp;
   plot.harvestedCount++;
@@ -2403,12 +2525,12 @@ function harvestCrop(idx) {
   plot.cropId = null;
   plot.plantedAt = null;
   plot.ready = false;
+  plot.fertilised = false;
   saveGame();
   renderAll();
 
-  // Floating coin label
   showFloatLabel(`+🪙${earnedCoins}`, idx);
-  notify(`✨ Harvested ${crop.name}! +🪙${earnedCoins} +${crop.xp}XP`, 'harvest');
+  notify(`✨ Harvested ${crop.name}! +🪙${earnedCoins}${wasFertilised ? ' 🌿+25%' : ''} +${crop.xp}XP`, 'harvest');
 
   if (G.level > prevLevel) {
     const ld = getLevelData(G.level);
@@ -2536,6 +2658,128 @@ function renderWateringCan() {
 }
 
 // ============================================================
+// COMPOST PILE
+// ============================================================
+const COMPOST_MAX_CHARGES  = 5;
+const COMPOST_CHARGE_SECS  = 4 * 60; // 4 minutes per charge
+
+function tickCompost() {
+  if (G.compostCharges >= COMPOST_MAX_CHARGES) return;
+  const now = Date.now();
+  // initialise timer on first tick after use
+  if (G.compostLastCharged === 0) { G.compostLastCharged = now; return; }
+  const elapsed = (now - G.compostLastCharged) / 1000;
+  if (elapsed >= COMPOST_CHARGE_SECS) {
+    G.compostCharges = Math.min(G.compostCharges + 1, COMPOST_MAX_CHARGES);
+    G.compostLastCharged = now;
+    saveGame();
+    if (G.compostCharges === COMPOST_MAX_CHARGES) {
+      notify('🌿 Compost pile fully charged! 5 fertiliser charges ready.', 'unlock');
+    }
+  }
+}
+
+function compostNextChargeSecs() {
+  if (G.compostCharges >= COMPOST_MAX_CHARGES) return 0;
+  if (G.compostLastCharged === 0) return COMPOST_CHARGE_SECS;
+  const elapsed = (Date.now() - G.compostLastCharged) / 1000;
+  return Math.max(0, COMPOST_CHARGE_SECS - elapsed);
+}
+
+function toggleFertiliseMode() {
+  if (G.compostCharges <= 0) {
+    notify('🌿 No compost charges! Wait for the pile to regenerate.', 'error');
+    return;
+  }
+  G.fertiliseMode = !G.fertiliseMode;
+  renderPlots();
+  renderCompost();
+}
+
+function applyFertiliser(idx) {
+  const plot = G.plots[idx];
+  if (!plot.unlocked) { notify('🔒 Unlock this plot first!', 'error'); return; }
+  if (plot.fertilised) { notify('🌿 Plot already fertilised!', 'error'); return; }
+  if (plot.ready)      { notify('🌿 Harvest first — fertiliser applies before harvest!', 'error'); return; }
+
+  plot.fertilised = true;
+  G.compostCharges--;
+  if (G.compostCharges < COMPOST_MAX_CHARGES && G.compostLastCharged === 0) {
+    G.compostLastCharged = Date.now();
+  }
+  G.fertiliseMode = false;
+  saveGame();
+  renderPlots();
+  renderCompost();
+  notify('🌿 Plot ' + (idx + 1) + ' fertilised! Next harvest +25% coins.', 'harvest');
+}
+
+function compostPileSVG(charges) {
+  const pct = charges / COMPOST_MAX_CHARGES;
+  // Colour shifts from dull brown → rich earthy green as charges fill
+  const pileColor  = pct >= 0.8 ? '#6D4C41' : pct >= 0.4 ? '#5D4037' : '#4E342E';
+  const steamColor = pct >= 0.6 ? 'rgba(139,195,74,0.6)' : 'rgba(180,180,180,0.3)';
+  return `<svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <!-- Bin body -->
+    <rect x="10" y="22" width="36" height="26" rx="4" fill="${pileColor}" stroke="#3E2723" stroke-width="1.5"/>
+    <!-- Bin slats -->
+    <line x1="19" y1="22" x2="19" y2="48" stroke="#3E2723" stroke-width="1" opacity="0.5"/>
+    <line x1="28" y1="22" x2="28" y2="48" stroke="#3E2723" stroke-width="1" opacity="0.5"/>
+    <line x1="37" y1="22" x2="37" y2="48" stroke="#3E2723" stroke-width="1" opacity="0.5"/>
+    <!-- Contents / fill level -->
+    ${charges > 0 ? `<rect x="11" y="${48 - Math.round(24 * pct)}" width="34" height="${Math.round(24 * pct)}" rx="3"
+      fill="#558B2F" opacity="0.55" clip-path="url(#bin-clip)"/>` : ''}
+    <clipPath id="bin-clip"><rect x="11" y="23" width="34" height="24" rx="3"/></clipPath>
+    <!-- Lid -->
+    <rect x="8" y="18" width="40" height="7" rx="3" fill="#4E342E" stroke="#3E2723" stroke-width="1.5"/>
+    <rect x="20" y="15" width="16" height="5" rx="2.5" fill="#4E342E" stroke="#3E2723" stroke-width="1"/>
+    <!-- Steam wisps when charged -->
+    ${pct >= 0.4 ? `<path d="M20 15 Q18 11 20 8 Q22 5 20 2" fill="none" stroke="${steamColor}" stroke-width="1.5" stroke-linecap="round"/>` : ''}
+    ${pct >= 0.6 ? `<path d="M28 14 Q26 10 28 7 Q30 4 28 1" fill="none" stroke="${steamColor}" stroke-width="1.5" stroke-linecap="round"/>` : ''}
+    ${pct >= 0.8 ? `<path d="M36 15 Q34 11 36 8 Q38 5 36 2" fill="none" stroke="${steamColor}" stroke-width="1.5" stroke-linecap="round"/>` : ''}
+    <!-- Leaf decoration -->
+    <ellipse cx="16" cy="25" rx="4" ry="2.5" fill="#8BC34A" opacity="${0.3 + pct * 0.5}" transform="rotate(-20 16 25)"/>
+    <ellipse cx="40" cy="26" rx="3.5" ry="2" fill="#7CB342" opacity="${0.2 + pct * 0.4}" transform="rotate(15 40 26)"/>
+  </svg>`;
+}
+
+function renderCompost() {
+  const btn    = document.getElementById('compost-btn');
+  const status = document.getElementById('compost-status');
+  const pips   = document.getElementById('compost-pips');
+  if (!btn || !status || !pips) return;
+
+  btn.innerHTML = compostPileSVG(G.compostCharges);
+
+  const hasCharges = G.compostCharges > 0;
+  btn.disabled = !hasCharges;
+  btn.title = G.fertiliseMode
+    ? 'Click a plot to fertilise it (or click here to cancel)'
+    : hasCharges ? 'Click to enter fertilise mode — then tap a plot (+25% sell)'
+                 : 'Recharging… wait for compost to be ready';
+
+  // Charge pips
+  pips.innerHTML = Array.from({length: COMPOST_MAX_CHARGES}, (_, i) =>
+    `<div class="compost-pip ${i < G.compostCharges ? 'filled' : ''}" title="${i < G.compostCharges ? 'Charge available' : 'Recharging'}"></div>`
+  ).join('');
+
+  if (G.fertiliseMode) {
+    status.textContent = '🌿 Select a plot to fertilise!';
+    status.style.color = '#8BC34A';
+  } else if (hasCharges) {
+    const secsLeft = compostNextChargeSecs();
+    const nextInfo = G.compostCharges < COMPOST_MAX_CHARGES
+      ? ' (next in ' + formatTime(secsLeft) + ')' : '';
+    status.textContent = G.compostCharges + '/' + COMPOST_MAX_CHARGES + ' charges' + nextInfo;
+    status.style.color = 'var(--green-hi)';
+  } else {
+    const secsLeft = compostNextChargeSecs();
+    status.textContent = '⏳ Recharging… ' + formatTime(secsLeft);
+    status.style.color = 'var(--text-dim)';
+  }
+}
+
+// ============================================================
 // TICK — runs every second
 // ============================================================
 function tick() {
@@ -2553,8 +2797,10 @@ function tick() {
   });
   checkRandomEvent();
   checkMerchant();
+  tickCompost();
   renderStats();
   renderWateringCan();
+  renderCompost();
   if (changed) {
     saveGame();
     renderPlots();
@@ -2575,6 +2821,7 @@ function renderAll() {
   renderStorage();
   renderShop();
   renderWateringCan();
+  renderCompost();
 }
 
 function renderStats() {
@@ -2715,18 +2962,24 @@ function renderPlots() {
     // EMPTY
     if (!plot.cropId) {
       const isTarget = G.selectedCrop !== null && (G.inventory[G.selectedCrop] || 0) > 0;
+      const isFertTarget = G.fertiliseMode && !plot.fertilised;
       let overlayContent = '';
       if (isTarget) {
         overlayContent = `<div style="opacity:0.55;transform:scale(0.7)">${makeCropCardSVG(G.selectedCrop, 50, 50)}</div>`;
+      } else if (isFertTarget) {
+        overlayContent = `<span style="font-size:22px">🌿</span>`;
       } else {
         overlayContent = `<span class="plus-sign">+</span>`;
       }
-      return `<div class="plot-tile empty ${isTarget?'plant-target':''}" data-idx="${idx}" onclick="tryPlant(${idx})">
+      const fertBadge = plot.fertilised ? `<div class="plot-fertilised-badge">🌿 +25%</div>` : '';
+      const clickHandler = G.fertiliseMode ? `applyFertiliser(${idx})` : `tryPlant(${idx})`;
+      return `<div class="plot-tile empty ${isTarget?'plant-target':''} ${isFertTarget?'fertilise-target':''}" data-idx="${idx}" onclick="${clickHandler}">
         <div class="plot-visual">
           <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
           <div class="plot-overlay">${overlayContent}</div>
+          ${fertBadge}
         </div>
-        <div class="plot-footer">Plot ${idx+1} — ${isTarget?'Tap to plant':' Empty'}</div>
+        <div class="plot-footer">Plot ${idx+1} — ${isFertTarget ? 'Tap to fertilise' : isTarget ? 'Tap to plant' : 'Empty'}</div>
       </div>`;
     }
 
@@ -2734,14 +2987,17 @@ function renderPlots() {
 
     // READY
     if (plot.ready) {
+      const fertBadge = plot.fertilised ? `<div class="plot-fertilised-badge">🌿 +25%</div>` : '';
+      const displayPrice = plot.fertilised ? Math.floor(crop.sellPrice * 1.25) : crop.sellPrice;
       return `<div class="plot-tile ready" data-idx="${idx}" onclick="harvestCrop(${idx})">
         <div class="plot-visual">
           <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
           <div class="plot-overlay" style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">
             <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(plot.cropId)}</svg>
           </div>
+          ${fertBadge}
         </div>
-        <div class="plot-footer"><span class="footer-harvest">✨ Harvest! +🪙${crop.sellPrice}</span></div>
+        <div class="plot-footer"><span class="footer-harvest">✨ Harvest! +🪙${displayPrice}</span></div>
       </div>`;
     }
 
@@ -2754,8 +3010,11 @@ function renderPlots() {
     const r = 44;
     const circ = 2 * Math.PI * r;
     const offset = circ * (1 - progress);
+    const fertBadge = plot.fertilised ? `<div class="plot-fertilised-badge">🌿 +25%</div>` : '';
+    const isFertTarget = G.fertiliseMode && !plot.fertilised;
+    const clickHandler = G.fertiliseMode ? `applyFertiliser(${idx})` : '';
 
-    return `<div class="plot-tile growing" data-idx="${idx}">
+    return `<div class="plot-tile growing ${isFertTarget ? 'fertilise-target' : ''}" data-idx="${idx}" ${clickHandler ? `onclick="${clickHandler}"` : ''}>
       <div class="plot-visual">
         <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
         <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -2770,8 +3029,9 @@ function renderPlots() {
             stroke-dasharray="${circ.toFixed(2)}"
             stroke-dashoffset="${offset.toFixed(2)}"/>
         </svg>
+        ${fertBadge}
       </div>
-      <div class="plot-footer">${crop.name} — ${formatTime(remaining)}</div>
+      <div class="plot-footer">${isFertTarget ? '🌿 Tap to fertilise' : `${crop.name} — ${formatTime(remaining)}`}</div>
     </div>`;
   }).join('');
 }
@@ -3906,6 +4166,11 @@ function init() {
     if (e.key === 'Escape') {
       closeJournal();
       document.getElementById('event-overlay').classList.add('hidden');
+      if (G.fertiliseMode) {
+        G.fertiliseMode = false;
+        renderPlots();
+        renderCompost();
+      }
     }
   });
 
