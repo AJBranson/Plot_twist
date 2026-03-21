@@ -365,6 +365,22 @@ button:active { transform: scale(0.95); }
   box-shadow: 0 0 16px rgba(154,255,80,0.5);
   animation: pulse-ready 1.2s ease-in-out infinite;
 }
+.plot-tile.exotic-ready .plot-visual {
+  border: 2px solid #FFD700;
+  box-shadow: 0 0 16px rgba(255,215,0,0.5);
+  animation: pulse-exotic 1.4s ease-in-out infinite;
+}
+.plot-tile.seeding .plot-visual {
+  border: 2px solid #A78BFA;
+}
+.plot-tile.seed-ready .plot-visual {
+  border: 2px solid #FFD700;
+  animation: pulse-exotic 1.2s ease-in-out infinite;
+}
+@keyframes pulse-exotic {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,215,0,0.3); }
+  50%       { box-shadow: 0 0 22px rgba(255,215,0,0.7); }
+}
 
 .plot-footer {
   background: rgba(10,20,8,0.85);
@@ -2213,7 +2229,12 @@ const DEFAULT_STATE = {
     cropId: null,
     plantedAt: null,
     ready: false,
-    fertilised: false,  // +25% sell bonus on next harvest
+    fertilised: false,   // +25% sell bonus on next harvest
+    seeding: false,      // exotic: true when going to seed instead of harvesting
+    seedingStartedAt: null, // ms timestamp when seed phase began
+    seedingDuration: null,  // ms total duration of seed phase
+    seedReady: false,    // true when seed phase is complete
+    heritage: false,     // true if the planted seed was a Heritage variant
   })),
   walletConnected: false,
   walletAddress: null,
@@ -2232,6 +2253,13 @@ const DEFAULT_STATE = {
   compostCharges: 5,       // 0-5 current charges; starts full
   compostLastCharged: 0,   // ms timestamp when last charge was added
   fertiliseMode: false,    // true when player is selecting a plot to fertilise
+
+  // Exotic seed-saving counters (lifetime, survive prestige)
+  seedsCollectedTotal: 0,  // total seed collections via seed-saving
+  exoticMishapsTotal: 0,   // total plots lost to mishaps
+  _exoticMishapsFix: 0,    // times player paid to fix a mishap
+  _exoticNearMisses: 0,    // times a near-miss mishap was survived
+  _heritageCollected: 0,   // total heritage seeds ever collected
 };
 
 let G = null; // game state
@@ -2259,6 +2287,11 @@ function saveGame() {
         plantedAt: p.plantedAt,
         ready: p.ready,
         fertilised: p.fertilised,
+        seeding: p.seeding || false,
+        seedingStartedAt: p.seedingStartedAt || null,
+        seedingDuration: p.seedingDuration || null,
+        seedReady: p.seedReady || false,
+        heritage: p.heritage || false,
       })),
       walletConnected: G.walletConnected,
       walletAddress: G.walletAddress,
@@ -2277,6 +2310,11 @@ function saveGame() {
       wateringCanLastUsed: G.wateringCanLastUsed,
       compostCharges: G.compostCharges,
       compostLastCharged: G.compostLastCharged,
+      seedsCollectedTotal: G.seedsCollectedTotal || 0,
+      exoticMishapsTotal: G.exoticMishapsTotal || 0,
+      _exoticMishapsFix: G._exoticMishapsFix || 0,
+      _exoticNearMisses: G._exoticNearMisses || 0,
+      _heritageCollected: G._heritageCollected || 0,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
   } catch(e) { console.warn('Save failed:', e); }
@@ -2312,11 +2350,24 @@ function loadGame() {
       G.wateringCanLastUsed = saved.wateringCanLastUsed ?? 0;
       G.compostCharges    = saved.compostCharges    ?? 5;
       G.compostLastCharged = saved.compostLastCharged ?? 0;
+      G.seedsCollectedTotal  = saved.seedsCollectedTotal  ?? 0;
+      G.exoticMishapsTotal   = saved.exoticMishapsTotal   ?? 0;
+      G._exoticMishapsFix    = saved._exoticMishapsFix    ?? 0;
+      G._exoticNearMisses    = saved._exoticNearMisses    ?? 0;
+      G._heritageCollected   = saved._heritageCollected   ?? 0;
       G.fertiliseMode = false;
       G.walletAddress = saved.walletAddress ?? null;
       if (saved.plots) {
         saved.plots.forEach((sp, i) => {
-          if (G.plots[i]) Object.assign(G.plots[i], { ...sp, fertilised: sp.fertilised ?? false });
+          if (G.plots[i]) Object.assign(G.plots[i], {
+            ...sp,
+            fertilised: sp.fertilised ?? false,
+            seeding: sp.seeding ?? false,
+            seedingStartedAt: sp.seedingStartedAt ?? null,
+            seedingDuration: sp.seedingDuration ?? null,
+            seedReady: sp.seedReady ?? false,
+            heritage: sp.heritage ?? false,
+          });
         });
       }
       G.selectedCrop = null;
@@ -2340,7 +2391,7 @@ function getAvailableCrops() {
 function isCropUnlocked(cropId) {
   const c = CROP_MAP[cropId];
   if (!c) return false;
-  if (c.exotic) return (G.inventory[cropId] || 0) > 0; // exotic: plantable only if you have seeds
+  if (c.exotic) return (G.inventory[cropId] || 0) > 0 || (G.inventory[cropId + '_heritage'] || 0) > 0;
   return c.unlockLevel <= G.level;
 }
 
@@ -2531,20 +2582,25 @@ function tryPlant(idx) {
     return;
   }
 
-  const crop = CROP_MAP[G.selectedCrop];
+  // Determine if this is a heritage seed (key ends in _heritage)
+  const isHeritage = G.selectedCrop.endsWith('_heritage');
+  const baseCropId = isHeritage ? G.selectedCrop.replace('_heritage', '') : G.selectedCrop;
+  const crop = CROP_MAP[baseCropId];
+
   G.inventory[G.selectedCrop] = count - 1;
   if (G.inventory[G.selectedCrop] <= 0) delete G.inventory[G.selectedCrop];
 
-  plot.cropId = G.selectedCrop;
+  plot.cropId = baseCropId;
   plot.plantedAt = Date.now();
   plot.ready = false;
+  plot.heritage = isHeritage;
 
   // Keep selection active if more seeds of this type remain
   if (!(G.inventory[G.selectedCrop] > 0)) G.selectedCrop = null;
 
   saveGame();
   renderAll();
-  notify('🌱 Planted ' + crop.name + '! (' + formatTime(crop.gameSecs) + ')', 'harvest');
+  notify('🌱 Planted ' + (isHeritage ? '✨ Heritage ' : '') + crop.name + '! (' + formatTime(crop.gameSecs) + ')', 'harvest');
 }
 
 function tryUnlockPlot(idx) {
@@ -2595,12 +2651,247 @@ function unlockPlotBSV(idx) {
   );
 }
 
+// ============================================================
+// EXOTIC SEED-SAVING
+// ============================================================
+
+// 45% of grow time for seed maturation phase
+const SEED_PHASE_RATIO = 0.45;
+
+// Returns plots in seed-saving mode with elapsed fraction, sorted oldest-first
+function getSeedingPlotsInfo() {
+  const now = Date.now();
+  return G.plots
+    .filter(p => p.seeding && p.seedingStartedAt && p.seedingDuration)
+    .map(p => ({
+      plot: p,
+      elapsed: (now - p.seedingStartedAt) / p.seedingDuration,
+    }))
+    .sort((a, b) => b.elapsed - a.elapsed); // highest fraction first = oldest
+}
+
+// Plots past the 50% grace window — eligible for mishap loss
+function getSeedingPlotsAtRisk() {
+  return getSeedingPlotsInfo().filter(info => info.elapsed >= 0.5);
+}
+
+// The single most-at-risk plot (highest elapsed fraction beyond 50%)
+function getOldestSeedingPlot() {
+  const atRisk = getSeedingPlotsAtRisk();
+  return atRisk.length > 0 ? atRisk[0].plot : null;
+}
+
+// Called when farmer chooses "Let Go to Seed" on a ready exotic plot
+function startSeedSaving(idx) {
+  const plot = G.plots[idx];
+  const crop = CROP_MAP[plot.cropId];
+  if (!crop || !crop.exotic || !plot.ready) return;
+
+  plot.ready = false;
+  plot.seeding = true;
+  plot.seedingStartedAt = Date.now();
+  plot.seedingDuration = Math.round(crop.gameSecs * SEED_PHASE_RATIO * 1000);
+  plot.seedReady = false;
+
+  // Close the harvest-fork overlay if open
+  const overlay = document.getElementById('harvest-fork-overlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  saveGame();
+  renderPlots();
+  notify(`🌱 ${crop.name} is going to seed… check back in ${formatTime(Math.round(crop.gameSecs * SEED_PHASE_RATIO))}`, 'harvest');
+}
+
+// Collect seeds from a ready seed-saving plot
+function collectSeeds(idx) {
+  const plot = G.plots[idx];
+  const crop = CROP_MAP[plot.cropId];
+  if (!plot.seedReady || !crop) return;
+
+  // Close the collection overlay
+  const overlay = document.getElementById('seed-collect-overlay-' + idx);
+  if (overlay) overlay.remove();
+
+  // Roll yield: 45% = 1 seed, 45% = 2 seeds, 10% = 3 seeds
+  const roll = Math.random();
+  let qty = roll < 0.45 ? 1 : roll < 0.90 ? 2 : 3;
+
+  // Heritage check: 10% chance
+  const isHeritage = Math.random() < 0.10;
+  const inventoryKey = isHeritage ? crop.id + '_heritage' : crop.id;
+
+  G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) + qty;
+  G.seedsCollectedTotal = (G.seedsCollectedTotal || 0) + 1;
+  if (isHeritage) G._heritageCollected = (G._heritageCollected || 0) + 1;
+
+  // Reset plot
+  plot.cropId = null;
+  plot.plantedAt = null;
+  plot.ready = false;
+  plot.seeding = false;
+  plot.seedingStartedAt = null;
+  plot.seedingDuration = null;
+  plot.seedReady = false;
+  plot.fertilised = false;
+  plot.heritage = false;
+
+  checkAchievements();
+  saveGame();
+  renderAll();
+
+  const heritageMsg = isHeritage ? ' ✨ Heritage seed!' : '';
+  notify(`🌱 Collected ${qty} ${crop.name} seed${qty !== 1 ? 's' : ''}!${heritageMsg}`, 'levelup');
+}
+
+// Called from tick() — advances seed phase, marks ready when done
+function tickSeedSaving() {
+  const now = Date.now();
+  let changed = false;
+  G.plots.forEach(plot => {
+    if (plot.seeding && !plot.seedReady && plot.seedingStartedAt && plot.seedingDuration) {
+      if ((now - plot.seedingStartedAt) >= plot.seedingDuration) {
+        plot.seedReady = true;
+        changed = true;
+        const crop = CROP_MAP[plot.cropId];
+        notify(`🌱 ${crop ? crop.name : 'Exotic'} seeds are ready to collect!`, 'harvest');
+      }
+    }
+  });
+  if (changed) { saveGame(); renderPlots(); }
+}
+
+// Mishap: destroy the single oldest at-risk seeding plot's seeds
+function applyMishapPartial() {
+  const plot = getOldestSeedingPlot();
+  if (!plot) return;
+  const crop = CROP_MAP[plot.cropId];
+  const name = crop ? crop.name : 'Exotic crop';
+  plot.cropId = null;
+  plot.plantedAt = null;
+  plot.ready = false;
+  plot.seeding = false;
+  plot.seedingStartedAt = null;
+  plot.seedingDuration = null;
+  plot.seedReady = false;
+  plot.fertilised = false;
+  plot.heritage = false;
+  G.exoticMishapsTotal = (G.exoticMishapsTotal || 0) + 1;
+  saveGame();
+  renderAll();
+  notify(`💔 Lost the ${name} seeds to the mishap!`, 'error');
+}
+
+// Mishap: destroy all at-risk seeding plots (elapsed > 50%)
+function applyMishapTotal() {
+  const atRisk = getSeedingPlotsAtRisk().map(info => info.plot);
+  const names = [];
+  atRisk.forEach(plot => {
+    const crop = CROP_MAP[plot.cropId];
+    if (crop) names.push(crop.name);
+    plot.cropId = null;
+    plot.plantedAt = null;
+    plot.ready = false;
+    plot.seeding = false;
+    plot.seedingStartedAt = null;
+    plot.seedingDuration = null;
+    plot.seedReady = false;
+    plot.fertilised = false;
+    plot.heritage = false;
+    G.exoticMishapsTotal = (G.exoticMishapsTotal || 0) + 1;
+  });
+  saveGame();
+  renderAll();
+  if (names.length > 0) notify(`💔 Lost all seeding plots to the mishap: ${names.join(', ')}!`, 'error');
+}
+
+// Show the harvest-fork overlay for an exotic ready plot
+function showHarvestFork(idx) {
+  const plot = G.plots[idx];
+  const crop = CROP_MAP[plot.cropId];
+  if (!crop) return;
+
+  // Remove any existing fork overlay
+  const existing = document.getElementById('harvest-fork-overlay');
+  if (existing) existing.remove();
+
+  const seedTime = formatTime(Math.round(crop.gameSecs * SEED_PHASE_RATIO));
+  const overlay = document.createElement('div');
+  overlay.id = 'harvest-fork-overlay';
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.75);z-index:300;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  `;
+  const displayPrice = Math.floor(crop.sellPrice * (1 + G.prestige * 0.10) * (plot.fertilised ? 1.25 : 1));
+  overlay.innerHTML = `
+    <div style="background:var(--bg-panel);border:2px solid rgba(255,215,0,0.4);border-radius:16px;padding:20px;max-width:320px;width:100%;text-align:center">
+      <div style="margin-bottom:8px">
+        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${(CROP_THEME[crop.id]||{bg:'#1A1A1A'}).bg};border-radius:8px;box-shadow:0 0 10px rgba(255,215,0,0.3)">${cropArt(crop.id)}</svg>
+      </div>
+      <div style="font-family:var(--ff-head);font-size:17px;color:#FFD700;margin-bottom:4px">✨ ${crop.name} Ready!</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">This is an exotic crop — what will you do?</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="harvestCrop(${idx});document.getElementById('harvest-fork-overlay').remove()"
+          style="background:rgba(45,107,32,0.3);border:1px solid var(--green-mid);border-radius:10px;padding:12px;cursor:pointer;text-align:left">
+          <div style="font-weight:800;color:var(--green-hi);font-size:13px">🌾 Harvest Now</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Earn 🪙${displayPrice} immediately. Seed consumed.</div>
+        </button>
+        <button onclick="startSeedSaving(${idx})"
+          style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.4);border-radius:10px;padding:12px;cursor:pointer;text-align:left">
+          <div style="font-weight:800;color:#FFD700;font-size:13px">🌱 Let Go to Seed</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Wait ~${seedTime} more. Gamble for 1–3 new seeds. No coin harvest.</div>
+        </button>
+      </div>
+      <button onclick="document.getElementById('harvest-fork-overlay').remove()"
+        style="margin-top:12px;background:transparent;border:none;color:var(--text-dim);font-size:12px;cursor:pointer">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+// Show seed collection confirmation overlay on a ready plot tile
+function showSeedCollectOverlay(idx) {
+  const existing = document.getElementById('seed-collect-overlay-' + idx);
+  if (existing) { existing.remove(); return; } // toggle off
+
+  const plot = G.plots[idx];
+  const crop = CROP_MAP[plot.cropId];
+  if (!crop) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'seed-collect-overlay-' + idx;
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.75);z-index:300;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  `;
+  overlay.innerHTML = `
+    <div style="background:var(--bg-panel);border:2px solid rgba(255,215,0,0.5);border-radius:16px;padding:20px;max-width:300px;width:100%;text-align:center">
+      <div style="font-size:28px;margin-bottom:6px">🌱</div>
+      <div style="font-family:var(--ff-head);font-size:16px;color:#FFD700;margin-bottom:4px">${crop.name} Seeds Ready!</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px">Yield: 1–2 seeds (10% chance of 3)</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">✨ 10% chance of a Heritage seed (+20% sell value when grown)</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button onclick="collectSeeds(${idx})"
+          style="background:rgba(255,215,0,0.15);border:1px solid rgba(255,215,0,0.5);border-radius:8px;padding:10px 18px;cursor:pointer;color:#FFD700;font-weight:800;font-size:13px">
+          🌱 Collect Seeds
+        </button>
+        <button onclick="document.getElementById('seed-collect-overlay-${idx}').remove()"
+          style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 18px;cursor:pointer;color:var(--text-dim);font-size:13px">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
 function harvestCrop(idx) {
   const plot = G.plots[idx];
   if (!plot.ready) return;
   const crop = CROP_MAP[plot.cropId];
 
-  const baseSell = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised ? 1.25 : 1));
+  const baseSell = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised ? 1.25 : 1) * (plot.heritage ? 1.20 : 1));
   const earnedCoins = applyEventModifiers(baseSell);
   const wasFertilised = plot.fertilised;
   G.coins += earnedCoins;
@@ -2617,6 +2908,7 @@ function harvestCrop(idx) {
   plot.plantedAt = null;
   plot.ready = false;
   plot.fertilised = false;
+  plot.heritage = false;
   saveGame();
   renderAll();
 
@@ -2889,6 +3181,7 @@ function tick() {
   checkRandomEvent();
   checkMerchant();
   tickCompost();
+  tickSeedSaving();
   renderStats();
   renderWateringCan();
   renderCompost();
@@ -3076,10 +3369,25 @@ function renderPlots() {
 
     const crop = CROP_MAP[plot.cropId];
 
-    // READY
+    // READY — exotic crops show a fork; regular crops harvest directly
     if (plot.ready) {
       const fertBadge = plot.fertilised ? `<div class="plot-fertilised-badge">🌿 +25%</div>` : '';
-      const displayPrice = plot.fertilised ? Math.floor(crop.sellPrice * 1.25) : crop.sellPrice;
+      const displayPrice = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised ? 1.25 : 1));
+      const isExotic = crop.exotic;
+      if (isExotic) {
+        const theme = CROP_THEME[crop.id] || { bg:'#1A1A1A', border:'rgba(255,215,0,0.4)' };
+        return `<div class="plot-tile ready exotic-ready" data-idx="${idx}" onclick="showHarvestFork(${idx})">
+          <div class="plot-visual" style="box-shadow:0 0 14px rgba(255,215,0,0.25)">
+            <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+            <div class="plot-overlay" style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">
+              <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 6px rgba(255,215,0,0.5))">${cropArt(plot.cropId)}</svg>
+            </div>
+            <div style="position:absolute;top:4px;right:4px;font-size:11px">✨</div>
+            ${fertBadge}
+          </div>
+          <div class="plot-footer"><span style="color:#FFD700;font-weight:800;font-size:11px">✨ Exotic Ready! Tap to decide</span></div>
+        </div>`;
+      }
       return `<div class="plot-tile ready" data-idx="${idx}" onclick="harvestCrop(${idx})">
         <div class="plot-visual">
           <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
@@ -3089,6 +3397,63 @@ function renderPlots() {
           ${fertBadge}
         </div>
         <div class="plot-footer"><span class="footer-harvest">✨ Harvest! +🪙${displayPrice}</span></div>
+      </div>`;
+    }
+
+    // SEEDING — exotic crop going to seed
+    if (plot.seeding) {
+      const crop2 = CROP_MAP[plot.cropId];
+      const theme = CROP_THEME[plot.cropId] || { bg:'#1A1A1A', border:'rgba(255,215,0,0.4)' };
+      const now2 = Date.now();
+      const elapsedFrac = plot.seedingDuration
+        ? Math.min((now2 - plot.seedingStartedAt) / plot.seedingDuration, 1)
+        : 0;
+      const remaining2 = plot.seedingDuration
+        ? Math.max((plot.seedingDuration - (now2 - plot.seedingStartedAt)) / 1000, 0)
+        : 0;
+      const atRisk = elapsedFrac >= 0.5;
+      const r2 = 44;
+      const circ2 = 2 * Math.PI * r2;
+      const offset2 = circ2 * (1 - elapsedFrac);
+      const ringColour = plot.seedReady ? '#FFD700' : atRisk ? '#FF8C00' : '#A78BFA';
+
+      if (plot.seedReady) {
+        return `<div class="plot-tile seeding seed-ready" data-idx="${idx}" onclick="showSeedCollectOverlay(${idx})">
+          <div class="plot-visual" style="box-shadow:0 0 12px rgba(255,215,0,0.3)">
+            <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+            <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
+              <div style="font-size:28px;filter:drop-shadow(0 0 6px gold)">🌱</div>
+              <div style="font-size:9px;color:#FFD700;font-weight:800;text-align:center">Seeds Ready!</div>
+            </div>
+            <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <circle class="progress-ring-bg" cx="50" cy="50" r="${r2}" stroke-width="5"/>
+              <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" stroke="${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="0"/>
+            </svg>
+          </div>
+          <div class="plot-footer" style="color:#FFD700;font-weight:800;font-size:11px">🌱 Tap to collect seeds</div>
+        </div>`;
+      }
+
+      const warnIcon = atRisk ? '<span title="At risk from mishap events" style="position:absolute;top:4px;right:4px;font-size:11px">⚠️</span>' : '';
+      const footerText = elapsedFrac < 0.5
+        ? `Going to seed… ${formatTime(remaining2)}`
+        : `Seeding ⚠️ ${formatTime(remaining2)}`;
+      return `<div class="plot-tile seeding" data-idx="${idx}">
+        <div class="plot-visual">
+          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+          <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px">
+            <div style="opacity:0.5;transform:scale(0.7) translateY(4px)">
+              <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="filter:grayscale(60%)">${cropArt(plot.cropId)}</svg>
+            </div>
+            <div style="font-size:9px;color:${atRisk ? '#FF8C00' : '#A78BFA'};font-weight:700">${atRisk ? '⚠️ At risk' : '🌱 Seeding…'}</div>
+          </div>
+          <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle class="progress-ring-bg" cx="50" cy="50" r="${r2}" stroke-width="5"/>
+            <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" stroke="${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="${offset2.toFixed(2)}"/>
+          </svg>
+          ${warnIcon}
+        </div>
+        <div class="plot-footer" style="font-size:10px;color:${atRisk ? '#FF8C00' : 'var(--text-dim)'}">${footerText}</div>
       </div>`;
     }
 
@@ -3159,24 +3524,35 @@ function renderStorage() {
   }
 
   grid.innerHTML = entries.map(([cropId, qty]) => {
-    const crop = CROP_MAP[cropId];
-    const theme = CROP_THEME[cropId] || { bg: '#1A1A1A' };
+    const isHeritage = cropId.endsWith('_heritage');
+    const baseCropId = isHeritage ? cropId.replace('_heritage', '') : cropId;
+    const crop = CROP_MAP[baseCropId];
+    if (!crop) return '';
+    const theme = CROP_THEME[baseCropId] || { bg: '#1A1A1A' };
     const selected = G.selectedCrop === cropId;
-    const isExotic = crop && crop.exotic;
-    const tileStyle = isExotic
-      ? `background:${theme.bg};box-shadow:0 0 8px ${theme.border},inset 0 0 4px rgba(255,215,0,0.08)`
-      : `background:${theme.bg}`;
-    const nameStyle = isExotic ? 'color:#FFD700' : '';
-    const exoticBadge = isExotic ? '<span style="position:absolute;top:2px;left:2px;font-size:9px">✨</span>' : '';
-    return `<div class="seed-tile${selected ? ' selected' : ''}" onclick="selectFromStorage('${cropId}')" title="${crop.name}: ${qty} seed${qty !== 1 ? 's' : ''}${isExotic ? ' (Exotic)' : ''}">
+    const isExotic = crop.exotic;
+    const tileStyle = isHeritage
+      ? `background:${theme.bg};box-shadow:0 0 10px rgba(255,215,0,0.5),inset 0 0 6px rgba(255,215,0,0.12)`
+      : isExotic
+        ? `background:${theme.bg};box-shadow:0 0 8px ${theme.border},inset 0 0 4px rgba(255,215,0,0.08)`
+        : `background:${theme.bg}`;
+    const nameStyle = isHeritage ? 'color:#FFD700;font-weight:800' : isExotic ? 'color:#FFD700' : '';
+    const topBadge = isHeritage
+      ? '<span style="position:absolute;top:2px;left:2px;font-size:9px;background:rgba(255,215,0,0.2);border-radius:3px;padding:0 2px;color:#FFD700;font-weight:800">✨ H</span>'
+      : isExotic
+        ? '<span style="position:absolute;top:2px;left:2px;font-size:9px">✨</span>'
+        : '';
+    const displayName = isHeritage ? crop.name + ' ✨' : crop.name;
+    const displayQty = typeof qty === 'object' ? qty.qty || 0 : qty;
+    return `<div class="seed-tile${selected ? ' selected' : ''}" onclick="selectFromStorage('${cropId}')" title="${displayName}: ${displayQty} seed${displayQty !== 1 ? 's' : ''}${isHeritage ? ' (Heritage — +20% sell value)' : isExotic ? ' (Exotic)' : ''}">
       <div class="seed-tile-art" style="${tileStyle};position:relative">
-        ${exoticBadge}
-        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(cropId)}</svg>
-        <span class="seed-tile-count">${qty}</span>
+        ${topBadge}
+        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(baseCropId)}</svg>
+        <span class="seed-tile-count">${displayQty}</span>
       </div>
-      <div class="seed-tile-name" style="${nameStyle}">${crop.name}</div>
+      <div class="seed-tile-name" style="${nameStyle}">${displayName}</div>
     </div>`;
-  }).join('');
+  }).filter(Boolean).join('');
 }
 
 function renderShop() {
@@ -3545,6 +3921,97 @@ const RANDOM_EVENTS = [
     },
     onIgnore: null,
     canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+  // ── Exotic mishap events (only fire when plots are seeding and at risk) ──
+  {
+    id: 'mishap_weevil',
+    icon: '🐛',
+    title: 'Seed Weevil Infestation!',
+    desc: 'Weevils have got into your exotic seed-bearing plots! Pay {cost} coins to fumigate or risk losing your oldest seeding plot\'s seeds.',
+    cost: (lvl) => Math.max(10, getSeedingPlotsAtRisk().length * 8),
+    fixLabel: (cost) => `Fumigate (🪙${cost})`,
+    onFix: () => {
+      G._exoticMishapsFix = (G._exoticMishapsFix || 0) + 1;
+      notify('🐛 Weevils fumigated! Exotic seeds safe.', 'harvest');
+    },
+    onIgnore: () => {
+      const roll = Math.random();
+      if (roll < 0.05) { applyMishapTotal(); }
+      else if (roll < 0.25) { applyMishapPartial(); }
+      else { G._exoticNearMisses = (G._exoticNearMisses || 0) + 1; notify('🐛 Weevils caused some damage but your seeds survived this time!', 'error'); }
+    },
+    canTrigger: () => getSeedingPlotsAtRisk().length > 0,
+  },
+  {
+    id: 'mishap_frost',
+    icon: '❄️',
+    title: 'Late Frost Warning!',
+    desc: 'An unexpected frost threatens your seed-bearing exotic crops! Pay {cost} coins to cover them or risk losing your oldest seeding plot\'s seeds.',
+    cost: (lvl) => Math.max(10, getSeedingPlotsAtRisk().length * 8),
+    fixLabel: (cost) => `Cover crops (🪙${cost})`,
+    onFix: () => {
+      G._exoticMishapsFix = (G._exoticMishapsFix || 0) + 1;
+      notify('❄️ Crops covered in time! Seeds protected.', 'harvest');
+    },
+    onIgnore: () => {
+      const roll = Math.random();
+      if (roll < 0.05) { applyMishapTotal(); }
+      else if (roll < 0.25) { applyMishapPartial(); }
+      else { G._exoticNearMisses = (G._exoticNearMisses || 0) + 1; notify('❄️ The frost was light — seeds survived!', 'error'); }
+    },
+    canTrigger: () => getSeedingPlotsAtRisk().length > 0,
+  },
+  {
+    id: 'mishap_crow',
+    icon: '🦅',
+    title: 'Crow Raid on Seed Heads!',
+    desc: 'A crow has spotted your ripening seed heads and is pecking at them! Pay {cost} coins to shoo it off or risk losing your oldest seeding plot\'s seeds.',
+    cost: (lvl) => Math.max(10, getSeedingPlotsAtRisk().length * 8),
+    fixLabel: (cost) => `Shoo it off (🪙${cost})`,
+    onFix: () => {
+      G._exoticMishapsFix = (G._exoticMishapsFix || 0) + 1;
+      notify('🦅 Crow chased away! Seed heads intact.', 'harvest');
+    },
+    onIgnore: () => {
+      const roll = Math.random();
+      if (roll < 0.05) { applyMishapTotal(); }
+      else if (roll < 0.25) { applyMishapPartial(); }
+      else { G._exoticNearMisses = (G._exoticNearMisses || 0) + 1; notify('🦅 The crow took a few seeds but left the rest!', 'error'); }
+    },
+    canTrigger: () => getSeedingPlotsAtRisk().length > 0,
+  },
+  {
+    id: 'mishap_fungal',
+    icon: '🍄',
+    title: 'Fungal Spore Drift!',
+    desc: 'Spores drifting from a neighbouring paddock are threatening your seed heads. Pay {cost} coins for a preventive spray or risk losing your oldest seeding plot\'s seeds.',
+    cost: (lvl) => Math.max(10, getSeedingPlotsAtRisk().length * 8),
+    fixLabel: (cost) => `Spray now (🪙${cost})`,
+    onFix: () => {
+      G._exoticMishapsFix = (G._exoticMishapsFix || 0) + 1;
+      notify('🍄 Spray applied! Spores neutralised.', 'harvest');
+    },
+    onIgnore: () => {
+      const roll = Math.random();
+      if (roll < 0.05) { applyMishapTotal(); }
+      else if (roll < 0.25) { applyMishapPartial(); }
+      else { G._exoticNearMisses = (G._exoticNearMisses || 0) + 1; notify('🍄 Spore drift was light — no damage this time.', 'error'); }
+    },
+    canTrigger: () => getSeedingPlotsAtRisk().length > 0,
+  },
+  {
+    id: 'mishap_wind',
+    icon: '💨',
+    title: 'Strange Wind Rattles the Seed Heads!',
+    desc: 'A sudden gust swept across your farm — luckily no seeds were lost this time. Nothing to pay; just a close call.',
+    cost: () => 0,
+    fixLabel: () => 'Phew!',
+    onFix: () => {
+      G._exoticNearMisses = (G._exoticNearMisses || 0) + 1;
+      notify('💨 Close call! Your seeds survived the wind.', 'harvest');
+    },
+    onIgnore: null,
+    canTrigger: () => getSeedingPlotsAtRisk().length > 0,
   },
 ];
 
@@ -4093,6 +4560,22 @@ const FARM_ACHIEVEMENTS = [
   { id:'ev_bee_boost',   icon:'🐝', name:'Bee Keeper',     category:'events',
     desc:'Benefit from a Wild Bee Swarm event',
     check: G => ({ earned: (G._beeBoostCount||0)>=1, progress:(G._beeBoostCount||0)>=1?1:0, progressLabel:'' }) },
+  // ── Exotic farming achievements ───────────────────────────
+  { id:'ev_first_seed',    icon:'🌱', name:'Seed Keeper',     category:'events',
+    desc:'Collect seeds via seed-saving for the first time',
+    check: G => ({ earned: (G.seedsCollectedTotal||0)>=1, progress:(G.seedsCollectedTotal||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_seeds_10',      icon:'🌱', name:'Patient Grower',  category:'events',
+    desc:'Collect seeds via seed-saving 10 times total',
+    check: G => ({ earned: (G.seedsCollectedTotal||0)>=10, progress:Math.min((G.seedsCollectedTotal||0)/10,1), progressLabel:(G.seedsCollectedTotal||0)+'/10' }) },
+  { id:'ev_heritage_first',icon:'✨', name:'Golden Lineage',  category:'events',
+    desc:'Collect a Heritage seed for the first time',
+    check: G => ({ earned: (G._heritageCollected||0)>=1, progress:(G._heritageCollected||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_mishap_survive',icon:'⚠️', name:'Lucky Escape',    category:'events',
+    desc:'Survive a mishap event with all seeds intact (near miss)',
+    check: G => ({ earned: (G._exoticNearMisses||0)>=1, progress:(G._exoticNearMisses||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_mishap_fix',    icon:'🛡️',name:'Vigilant Farmer', category:'events',
+    desc:'Pay to fix an exotic mishap event 5 times',
+    check: G => ({ earned: (G._exoticMishapsFix||0)>=5, progress:Math.min((G._exoticMishapsFix||0)/5,1), progressLabel:(G._exoticMishapsFix||0)+'/5' }) },
 ];
 
 // Build the combined list once at startup
@@ -4292,6 +4775,7 @@ function renderEventsTab(earned) {
     { title: 'Random Events', ids: ['ev_first_event','ev_events_10','ev_fix_event','ev_fix_10'] },
     { title: 'Wandering Merchant', ids: ['ev_merchant','ev_merchant_5','ev_merchant_10','ev_merchant_20','ev_merchant_40'] },
     { title: 'Weather Blessings', ids: ['ev_sun_bonus','ev_bee_boost'] },
+    { title: '✨ Exotic Farming', ids: ['ev_first_seed','ev_seeds_10','ev_heritage_first','ev_mishap_survive','ev_mishap_fix'] },
   ];
   let html = '';
   sections.forEach(sec => {
@@ -4404,6 +4888,8 @@ function init() {
     if (e.key === 'Escape') {
       closeJournal();
       document.getElementById('event-overlay').classList.add('hidden');
+      const hf = document.getElementById('harvest-fork-overlay');
+      if (hf) hf.remove();
       if (G.fertiliseMode) {
         G.fertiliseMode = false;
         renderPlots();
