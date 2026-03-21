@@ -2160,6 +2160,13 @@ function buySeedsBSV(cropId, qty) {
 }
 
 // STORAGE: click a seed tile to select it for planting
+function clearSelectedCrop() {
+  G.selectedCrop = null;
+  renderPlots();
+  renderStorage();
+  renderShop();
+}
+
 function selectFromStorage(cropId) {
   if ((G.inventory[cropId] || 0) <= 0) return;
   G.selectedCrop = (G.selectedCrop === cropId) ? null : cropId;
@@ -2586,7 +2593,7 @@ function renderShop() {
     banner.innerHTML = `<div class="selected-indicator">
       <svg width="18" height="18" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(G.selectedCrop)}</svg>
       ${sc.name} ×${qty} ready to plant
-      <button onclick="G.selectedCrop=null;renderPlots();renderStorage();">✕</button>
+      <button onclick="event.stopPropagation();clearSelectedCrop()">✕</button>
     </div>`;
   } else {
     banner.innerHTML = '';
