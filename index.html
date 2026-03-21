@@ -1,0 +1,3445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌾 Plot Twist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ROOT & RESET
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #111D0F;
+  --bg-surface:  #182B14;
+  --bg-panel:    #1F3819;
+  --plot-locked: #1A1A1A;
+  --soil-a:      #5C3210;
+  --soil-b:      #7A4422;
+  --soil-c:      #4A2510;
+  --gold:        #FFD140;
+  --gold-dark:   #C89400;
+  --coin-glow:   rgba(255,209,64,0.3);
+  --xp-purple:   #A78BFA;
+  --green-hi:    #6FCF3A;
+  --green-mid:   #4CAF50;
+  --green-dim:   #2D6B20;
+  --ready-glow:  #9AFF50;
+  --lock-col:    #4A4A4A;
+  --text:        #E8F5DC;
+  --text-dim:    rgba(232,245,220,0.55);
+  --border:      rgba(120,200,60,0.22);
+  --panel-bg:    rgba(20,42,16,0.97);
+  --radius:      12px;
+  --ff-head:     'Fredoka One', 'Trebuchet MS', sans-serif;
+  --ff-body:     'Nunito', 'Segoe UI', sans-serif;
+}
+
+body {
+  font-family: var(--ff-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button { cursor: pointer; font-family: var(--ff-body); border: none; outline: none; }
+button:active { transform: scale(0.95); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+#game {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+#header {
+  background: linear-gradient(180deg, #0C1A08 0%, #182B14 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+.game-title {
+  font-family: var(--ff-head);
+  font-size: 22px;
+  color: var(--green-hi);
+  text-shadow: 0 2px 8px rgba(111,207,58,0.5);
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stat-pill .icon { font-size: 15px; }
+.stat-pill.coins .val { color: var(--gold); }
+.stat-pill.score .val { color: #7DD3FC; }
+
+.level-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(167,139,250,0.1);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 20px;
+  padding: 5px 12px;
+}
+
+.level-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.level-badge {
+  color: var(--xp-purple);
+  font-family: var(--ff-head);
+  font-size: 14px;
+}
+
+.level-title-text { color: var(--text-dim); font-size: 11px; }
+.xp-text { color: var(--xp-purple); font-size: 11px; }
+
+.xp-bar-outer {
+  width: 120px;
+  height: 5px;
+  background: rgba(167,139,250,0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--xp-purple), #C4B5FD);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.bsv-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,209,64,0.06);
+  border: 1px solid rgba(255,209,64,0.2);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.bsv-pill button {
+  background: var(--gold);
+  color: #1A1000;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--ff-body);
+}
+
+/* ============================================================
+   MAIN AREA
+   ============================================================ */
+#main {
+  display: grid;
+  grid-template-columns: 1fr 270px;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ============================================================
+   FARM AREA
+   ============================================================ */
+#farm-area {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+#farm-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  max-width: 520px;
+  flex-wrap: wrap;
+}
+.farm-name-wrap, .farmer-name-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.farm-name-wrap:hover, .farmer-name-wrap:hover {
+  background: rgba(111,207,58,0.1);
+}
+.farm-name-text {
+  font-family: var(--ff-head);
+  font-size: 18px;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+.farmer-label {
+  font-family: var(--ff-body);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.farmer-name-text {
+  font-family: var(--ff-head);
+  font-size: 16px;
+  color: var(--green-hi);
+}
+.name-edit-icon {
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 2px;
+}
+.farm-name-wrap:hover .name-edit-icon,
+.farmer-name-wrap:hover .name-edit-icon { opacity: 1; }
+.name-input {
+  font-family: var(--ff-head);
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid var(--green-hi);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 2px 7px;
+  outline: none;
+  width: 140px;
+  max-width: 140px;
+}
+
+#plots-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  max-width: 520px;
+}
+
+/* ============================================================
+   PLOT TILES
+   ============================================================ */
+.plot-tile {
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
+}
+
+.plot-tile:hover { transform: translateY(-2px); }
+
+.plot-visual {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+}
+
+.plot-soil-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.plot-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plot-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.5);
+  padding: 3px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text);
+}
+
+/* States */
+.plot-tile.locked .plot-visual {
+  background: #131310;
+  border: 2px solid rgba(255,255,255,0.06);
+}
+
+.plot-tile.empty .plot-visual {
+  border: 2px solid rgba(90,50,20,0.6);
+}
+
+.plot-tile.plant-target .plot-visual {
+  border: 2px dashed var(--green-hi);
+  box-shadow: 0 0 12px rgba(111,207,58,0.4);
+  animation: pulse-green 1.5s ease-in-out infinite;
+}
+
+.plot-tile.growing .plot-visual {
+  border: 2px solid rgba(76,175,80,0.4);
+}
+
+.plot-tile.ready .plot-visual {
+  border: 2px solid var(--ready-glow);
+  box-shadow: 0 0 16px rgba(154,255,80,0.5);
+  animation: pulse-ready 1.2s ease-in-out infinite;
+}
+
+.plot-footer {
+  background: rgba(10,20,8,0.85);
+  padding: 4px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-align: center;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plot-footer .footer-harvest {
+  color: var(--ready-glow);
+  font-size: 11px;
+}
+
+.plus-sign {
+  font-size: 28px;
+  color: rgba(255,255,255,0.18);
+  font-weight: 300;
+  line-height: 1;
+}
+
+.plant-target .plus-sign {
+  color: rgba(111,207,58,0.5);
+}
+
+/* Progress ring */
+.progress-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.progress-ring-bg { fill: none; stroke: rgba(255,255,255,0.06); }
+.progress-ring-fill { fill: none; stroke: var(--green-mid); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+
+/* Crop art on plot */
+.crop-art {
+  transition: transform 0.5s ease, opacity 0.5s ease;
+  transform-origin: bottom center;
+}
+
+/* Harvest sparkle */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 8px rgba(111,207,58,0.3); }
+  50%       { box-shadow: 0 0 20px rgba(111,207,58,0.7); }
+}
+@keyframes pulse-ready {
+  0%, 100% { box-shadow: 0 0 12px rgba(154,255,80,0.4); }
+  50%       { box-shadow: 0 0 28px rgba(154,255,80,0.9); }
+}
+@keyframes harvest-pop {
+  0%   { transform: scale(1); opacity: 1; }
+  50%  { transform: scale(1.3); opacity: 0.8; }
+  100% { transform: scale(0); opacity: 0; }
+}
+@keyframes coin-float {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+.shake { animation: shake 0.4s ease; }
+
+/* ============================================================
+   SHOP SIDEBAR
+   ============================================================ */
+#shop-sidebar {
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#shop-header {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+}
+
+#shop-title {
+  font-family: var(--ff-head);
+  font-size: 16px;
+  color: var(--green-hi);
+}
+
+#shop-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 3px;
+  min-height: 15px;
+}
+
+#shop-crops-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Scrollbar styling */
+#shop-crops-list::-webkit-scrollbar { width: 4px; }
+#shop-crops-list::-webkit-scrollbar-track { background: transparent; }
+#shop-crops-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.shop-level-divider {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 2px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.crop-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 9px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.crop-card:hover { background: rgba(111,207,58,0.08); border-color: rgba(111,207,58,0.3); }
+
+.crop-card.selected {
+  background: rgba(111,207,58,0.15);
+  border-color: var(--green-hi);
+  box-shadow: 0 0 10px rgba(111,207,58,0.25);
+}
+
+.crop-card.locked-crop {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+.crop-card.unaffordable {
+  opacity: 0.6;
+}
+
+.crop-card-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.crop-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.crop-card-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crop-card-stats {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.crop-stat-coin { color: var(--gold); font-weight: 700; }
+.crop-stat-sell { color: var(--green-hi); font-weight: 700; }
+.crop-stat-time { color: #93C5FD; }
+
+.crop-lock-badge {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  background: rgba(100,100,100,0.5);
+  padding: 2px 5px;
+  border-radius: 8px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   NOTIFICATIONS & LEVEL UP
+   ============================================================ */
+#notif-container {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.notif {
+  background: rgba(20,40,16,0.96);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  animation: notif-in 0.3s ease forwards;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  max-width: 240px;
+}
+
+.notif.harvest  { border-color: var(--green-hi); }
+.notif.levelup  { border-color: var(--xp-purple); background: rgba(30,20,50,0.97); }
+.notif.unlock   { border-color: var(--gold); }
+.notif.error    { border-color: #FF6B6B; }
+
+@keyframes notif-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes notif-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(20px); }
+}
+.notif.leaving { animation: notif-out 0.3s ease forwards; }
+
+/* Floating coin label */
+.float-label {
+  position: fixed;
+  font-family: var(--ff-head);
+  font-size: 18px;
+  color: var(--gold);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  pointer-events: none;
+  z-index: 300;
+  animation: coin-float 0.9s ease forwards;
+}
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+@media (max-width: 768px) {
+  #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  #shop-sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 260px; }
+  #shop-crops-list { flex-direction: row; flex-wrap: wrap; }
+  .shop-level-divider { width: 100%; }
+  .crop-card { width: calc(50% - 6px); flex-shrink: 0; }
+  #plots-grid { grid-template-columns: repeat(3, 1fr); max-width: 100%; }
+}
+
+@media (max-width: 480px) {
+  #plots-grid { grid-template-columns: repeat(2, 1fr); }
+  .header-stats { gap: 6px; }
+  .xp-bar-outer { width: 80px; }
+}
+
+/* ============================================================
+   STORAGE AREA
+   ============================================================ */
+#storage-area {
+  margin-top: 18px;
+  max-width: 520px;
+}
+
+#storage-heading {
+  font-family: var(--ff-head);
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#storage-count-badge {
+  font-family: var(--ff-body);
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(111,207,58,0.18);
+  color: var(--green-hi);
+  border-radius: 10px;
+  padding: 2px 7px;
+}
+
+#storage-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.storage-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 10px 4px;
+  font-style: italic;
+}
+
+.seed-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: transform 0.12s;
+  user-select: none;
+}
+
+.seed-tile:hover { transform: translateY(-2px); }
+
+.seed-tile-art {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.seed-tile.selected .seed-tile-art {
+  border-color: var(--green-hi);
+  box-shadow: 0 0 10px rgba(111,207,58,0.5);
+}
+
+.seed-tile-count {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  background: var(--gold);
+  color: #1A1000;
+  font-size: 9px;
+  font-weight: 900;
+  font-family: var(--ff-body);
+  border-radius: 7px;
+  padding: 1px 4px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.seed-tile-name {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-align: center;
+  max-width: 52px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seed-tile.selected .seed-tile-name { color: var(--green-hi); }
+
+/* ============================================================
+   SHOP QTY PICKER
+   ============================================================ */
+.crop-card-qty {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.qty-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+
+.qty-btn:hover { background: rgba(255,255,255,0.16); }
+
+.qty-display {
+  min-width: 22px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.qty-total {
+  flex: 1;
+  font-size: 10px;
+  color: var(--gold);
+  font-weight: 700;
+  text-align: right;
+}
+
+.buy-btn {
+  background: var(--green-hi);
+  color: #0A1F06;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--ff-body);
+  border-radius: 8px;
+  padding: 4px 10px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.buy-btn:hover { background: #88F54A; }
+.buy-btn:disabled { background: rgba(111,207,58,0.25); color: var(--text-dim); cursor: not-allowed; }
+
+.crop-card.expanded {
+  background: rgba(111,207,58,0.09);
+  border-color: rgba(111,207,58,0.4);
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.crop-card.expanded .crop-card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================
+   MISC
+   ============================================================ */
+.selected-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(111,207,58,0.12);
+  border: 1px solid var(--green-hi);
+  border-radius: 10px;
+  padding: 5px 10px;
+  margin: 6px 8px 0;
+  font-size: 11px;
+  color: var(--green-hi);
+  font-weight: 700;
+}
+
+.selected-indicator button {
+  background: rgba(255,255,255,0.1);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  margin-left: auto;
+}
+.prestige-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255,209,64,0.08);
+  border: 1px solid rgba(255,209,64,0.35);
+  border-radius: 20px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.prestige-pill:hover {
+  background: rgba(255,209,64,0.18);
+  box-shadow: 0 0 10px rgba(255,209,64,0.3);
+}
+.prestige-pill.max {
+  border-color: rgba(255,150,0,0.6);
+  background: rgba(255,150,0,0.12);
+  color: #FFA040;
+}
+.prestige-ready {
+  animation: prestige-pulse 1.5s ease-in-out infinite;
+}
+@keyframes prestige-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,209,64,0.3); }
+  50%       { box-shadow: 0 0 18px rgba(255,209,64,0.8); }
+}
+
+/* ============================================================
+   RANDOM EVENT MODAL
+   ============================================================ */
+#event-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fade-in 0.25s ease;
+}
+#event-overlay.hidden { display: none; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+#event-card {
+  background: linear-gradient(160deg, #182B14 0%, #111D0F 100%);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  max-width: 340px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  animation: card-pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes card-pop {
+  from { transform: scale(0.88); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.event-icon {
+  font-size: 40px;
+  text-align: center;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.event-title {
+  font-family: var(--ff-head);
+  font-size: 20px;
+  color: var(--text);
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.event-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.55;
+  margin-bottom: 18px;
+}
+
+.event-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.event-btn-primary {
+  background: var(--green-hi);
+  color: #0A1F06;
+  font-family: var(--ff-body);
+  font-size: 13px;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 8px 18px;
+  transition: background 0.15s;
+}
+.event-btn-primary:hover { background: #88F54A; }
+.event-btn-primary:disabled {
+  background: rgba(111,207,58,0.25);
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.event-btn-secondary {
+  background: rgba(255,255,255,0.07);
+  color: var(--text-dim);
+  font-family: var(--ff-body);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.15s;
+}
+.event-btn-secondary:hover { background: rgba(255,255,255,0.13); }
+
+/* ============================================================
+   WANDERING MERCHANT BANNER
+   ============================================================ */
+#merchant-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 350;
+  background: linear-gradient(135deg, #1A0F2E 0%, #2D1B00 100%);
+  border: 1.5px solid rgba(255,190,60,0.5);
+  border-radius: 16px;
+  padding: 14px 18px;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 20px rgba(255,190,60,0.15);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: merchant-slide 0.4s cubic-bezier(0.34,1.4,0.64,1);
+}
+#merchant-banner.hidden { display: none; }
+
+@keyframes merchant-slide {
+  from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+
+.merchant-icon {
+  font-size: 34px;
+  flex-shrink: 0;
+}
+
+.merchant-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.merchant-title {
+  font-family: var(--ff-head);
+  font-size: 14px;
+  color: #FFD090;
+  margin-bottom: 3px;
+}
+
+.merchant-offer {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.merchant-timer {
+  font-size: 10px;
+  color: rgba(255,190,60,0.6);
+  margin-top: 3px;
+  font-weight: 700;
+}
+
+.merchant-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.merchant-btn-deal {
+  background: linear-gradient(135deg, #FFB020, #FF8C00);
+  color: #1A0800;
+  font-family: var(--ff-body);
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.merchant-btn-deal:hover { opacity: 0.88; }
+.merchant-btn-deal:disabled {
+  background: rgba(255,140,0,0.25);
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.merchant-btn-pass {
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--ff-body);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+  transition: background 0.15s;
+}
+.merchant-btn-pass:hover { background: rgba(255,255,255,0.07); }
+
+/* ============================================================
+   JOURNAL BUTTON
+   ============================================================ */
+.journal-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(167,139,250,0.10);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: 18px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--ff-body);
+  color: var(--xp-purple);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  position: relative;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.journal-btn:hover {
+  background: rgba(167,139,250,0.22);
+  box-shadow: 0 0 10px rgba(167,139,250,0.25);
+}
+.journal-new-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background: #FF6B6B;
+  border-radius: 50%;
+  margin-left: 2px;
+  animation: jdot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes jdot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* ============================================================
+   JOURNAL MODAL
+   ============================================================ */
+#journal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  animation: fade-in 0.2s ease;
+}
+#journal-overlay.hidden { display: none; }
+
+#journal-modal {
+  background: linear-gradient(160deg, #182B14 0%, #0F1D0D 100%);
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+  animation: card-pop 0.3s cubic-bezier(0.34,1.4,0.64,1);
+  overflow: hidden;
+}
+
+#journal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#journal-title {
+  font-family: var(--ff-head);
+  font-size: 18px;
+  color: var(--xp-purple);
+  flex-shrink: 0;
+}
+
+#journal-tabs {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+}
+
+.jtab {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--ff-body);
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.jtab.active {
+  background: var(--xp-purple);
+  color: #1A0F2E;
+  border-color: transparent;
+}
+.jtab:hover:not(.active) { background: rgba(167,139,250,0.12); }
+
+.journal-close-btn {
+  background: rgba(255,255,255,0.07);
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.journal-close-btn:hover { background: rgba(255,255,255,0.15); color: var(--text); }
+
+#journal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+#journal-body::-webkit-scrollbar { width: 4px; }
+#journal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.jtab-panel { display: none; }
+.jtab-panel.active { display: block; }
+
+#journal-footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/* Achievement cards */
+.ach-section-title {
+  font-family: var(--ff-head);
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 14px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.ach-section-title:first-child { margin-top: 2px; }
+
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ach-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  transition: background 0.15s;
+}
+.ach-card.earned {
+  background: rgba(167,139,250,0.10);
+  border-color: rgba(167,139,250,0.4);
+}
+.ach-card.earned-new {
+  background: rgba(167,139,250,0.18);
+  border-color: var(--xp-purple);
+  box-shadow: 0 0 10px rgba(167,139,250,0.3);
+}
+.ach-card.locked {
+  opacity: 0.38;
+}
+
+.ach-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.ach-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.3;
+}
+.ach-card.locked .ach-name { color: var(--text-dim); }
+.ach-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.ach-earned-tick {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  font-size: 11px;
+  color: var(--xp-purple);
+}
+.ach-progress {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.ach-progress-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.ach-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--xp-purple), #C4B5FD);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* Crop journal rows */
+.crop-journal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.crop-journal-row:hover { background: rgba(255,255,255,0.03); }
+.crop-journal-art {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.crop-journal-info { flex: 1; min-width: 0; }
+.crop-journal-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.crop-journal-count {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.crop-journal-badges {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.crop-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-dim);
+}
+.crop-badge.earned {
+  background: rgba(167,139,250,0.2);
+  border-color: var(--xp-purple);
+}
+.crop-badge.gold {
+  background: rgba(255,209,64,0.15);
+  border-color: var(--gold);
+}
+.crop-badge.platinum {
+  background: rgba(200,200,255,0.15);
+  border-color: #B0B8FF;
+}
+</style>
+</head>
+<body>
+
+<!-- Metanet Platform SDK Snippet (stub for local dev) -->
+<script type="module">
+  const eventTarget = new EventTarget();
+  const sendCommand = (commandObj) => {
+    try {
+      window.parent.postMessage({ command: "ninja-app-command", detail: commandObj }, "*");
+      eventTarget.dispatchEvent(new CustomEvent('platform-command', { detail: commandObj }));
+    } catch (err) { console.error('SDK send error:', err); }
+  };
+  const onCommand = (callback) => {
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.command === "ninja-app-command") callback(event.data);
+    });
+  };
+  window.platformSDK = { sendCommand, onCommand };
+</script>
+
+<div id="game">
+
+  <!-- HEADER -->
+  <header id="header">
+    <span class="game-title">🌾 Plot Twist</span>
+    <div class="header-stats">
+      <div class="stat-pill coins">
+        <span class="icon">🪙</span>
+        <span class="val" id="stat-coins">2</span>
+      </div>
+      <div class="level-pill">
+        <div class="level-top">
+          <span class="level-badge">Lv <span id="stat-level">1</span></span>
+          <span class="level-title-text" id="stat-level-title">Seedling</span>
+          <span class="xp-text"><span id="stat-xp">0</span>/<span id="stat-xp-max">150</span> XP</span>
+        </div>
+        <div class="xp-bar-outer">
+          <div class="xp-bar-fill" id="xp-fill" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="stat-pill score">
+        <span class="icon">🏆</span>
+        <span class="val" id="stat-score">300</span>
+      </div>
+      <div class="prestige-pill" id="prestige-pill" style="display:none" onclick="doPrestige()" title="Click to Prestige at Level 10">
+        <span id="prestige-stars"></span>
+        <span id="prestige-bonus"></span>
+      </div>
+    </div>
+    <div class="bsv-pill" id="bsv-pill">
+      <span id="bsv-status">Wallet: Local Mode</span>
+      <button onclick="connectWallet()">Connect</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main id="main">
+
+    <!-- FARM AREA -->
+    <section id="farm-area">
+      <div id="farm-heading">
+        <div class="farm-name-wrap" onclick="startEditName('farm')" title="Click to rename your farm">
+          <span class="farm-name-text" id="farm-name-display">🌿 My Farm</span>
+          <span class="name-edit-icon">✏️</span>
+        </div>
+        <div class="farmer-name-wrap" onclick="startEditName('farmer')" title="Click to set your name">
+          <span class="farmer-label">Farmer</span>
+          <span class="farmer-name-text" id="farmer-name-display">Farmer</span>
+          <span class="name-edit-icon">✏️</span>
+        </div>
+        <button class="journal-btn" onclick="openJournal()" title="Crop Journal &amp; Achievements" id="journal-btn">
+          📖 Journal <span id="journal-new-badge" style="display:none" class="journal-new-dot"></span>
+        </button>
+      </div>
+      <div id="plots-grid"></div>
+
+      <!-- STORAGE -->
+      <div id="storage-area">
+        <div id="storage-heading">
+          🎒 Seed Storage
+          <span id="storage-count-badge">empty</span>
+        </div>
+        <div id="storage-grid"></div>
+      </div>
+    </section>
+
+    <!-- SHOP SIDEBAR -->
+    <aside id="shop-sidebar">
+      <div id="shop-header">
+        <div id="shop-title">🛒 Seed Shop</div>
+        <div id="shop-hint">Buy seeds → they go to storage → tap storage to plant.</div>
+      </div>
+      <div id="selected-banner"></div>
+      <div id="shop-crops-list"></div>
+    </aside>
+
+  </main>
+</div>
+
+<!-- Notification container -->
+<div id="notif-container"></div>
+
+<!-- Random Event Modal -->
+<div id="event-overlay" class="hidden">
+  <div id="event-card">
+    <span class="event-icon" id="event-icon"></span>
+    <div class="event-title" id="event-title"></div>
+    <div class="event-desc"  id="event-desc"></div>
+    <div class="event-btns" id="event-btns"></div>
+  </div>
+</div>
+
+<!-- Wandering Merchant Banner -->
+<div id="merchant-banner" class="hidden">
+  <div class="merchant-icon">🧙</div>
+  <div class="merchant-body">
+    <div class="merchant-title" id="merchant-title">Wandering Merchant</div>
+    <div class="merchant-offer" id="merchant-offer"></div>
+    <div class="merchant-timer" id="merchant-timer"></div>
+  </div>
+  <div class="merchant-btns">
+    <button class="merchant-btn-deal" id="merchant-deal-btn" onclick="acceptMerchantDeal()">Take Deal</button>
+    <button class="merchant-btn-pass" onclick="dismissMerchant()">Pass</button>
+  </div>
+</div>
+
+<!-- Crop Journal Modal -->
+<div id="journal-overlay" class="hidden">
+  <div id="journal-modal">
+    <div id="journal-header">
+      <div id="journal-title">📖 Crop Journal</div>
+      <div id="journal-tabs">
+        <button class="jtab active" onclick="showJTab('crops')">Crops</button>
+        <button class="jtab" onclick="showJTab('farm')">Farm</button>
+        <button class="jtab" onclick="showJTab('events')">Events</button>
+      </div>
+      <button class="journal-close-btn" onclick="closeJournal()">✕</button>
+    </div>
+    <div id="journal-body">
+      <div id="jtab-crops" class="jtab-panel active"></div>
+      <div id="jtab-farm"  class="jtab-panel"></div>
+      <div id="jtab-events" class="jtab-panel"></div>
+    </div>
+    <div id="journal-footer">
+      <span id="journal-summary"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// CROP DATA
+// ============================================================
+// Change SECS_PER_DAY to adjust game speed:
+//   3.3 = design speed  (~1.5 min radish)
+//   1.0 = fast testing  (~27 sec radish)
+//   0.1 = ultra-fast    (~3 sec radish)
+const SECS_PER_DAY = 3.3;
+
+const CROPS = [
+  { id:'radish',      name:'Radish',      days:27,  speed:'Fast',   seedCost:2,  sellPrice:8,  xp:5,   unlockLevel:1 },
+  { id:'lettuce',     name:'Lettuce',     days:52,  speed:'Fast',   seedCost:3,  sellPrice:14, xp:8,  unlockLevel:1 },
+  { id:'spinach',     name:'Spinach',     days:45,  speed:'Fast',   seedCost:4,  sellPrice:18, xp:7,  unlockLevel:1 },
+  { id:'zucchini',    name:'Zucchini',    days:57,  speed:'Fast',   seedCost:3,  sellPrice:14, xp:8,  unlockLevel:1 },
+  { id:'beans',       name:'Beans',       days:57,  speed:'Fast',   seedCost:5,  sellPrice:20, xp:9,  unlockLevel:2 },
+  { id:'peas',        name:'Peas',        days:65,  speed:'Fast',   seedCost:6,  sellPrice:22, xp:10,  unlockLevel:2 },
+  { id:'cucumber',    name:'Cucumber',    days:60,  speed:'Fast',   seedCost:4,  sellPrice:16, xp:8,  unlockLevel:2 },
+  { id:'beetroot',    name:'Beetroot',    days:70,  speed:'Medium', seedCost:5,  sellPrice:22, xp:12,  unlockLevel:3 },
+  { id:'carrot',      name:'Carrot',      days:75,  speed:'Medium', seedCost:4,  sellPrice:18, xp:11,  unlockLevel:3 },
+  { id:'cabbage',     name:'Cabbage',     days:100, speed:'Medium', seedCost:5,  sellPrice:20, xp:14,  unlockLevel:3 },
+  { id:'tomato',      name:'Tomato',      days:80,  speed:'Medium', seedCost:8,  sellPrice:35, xp:15,  unlockLevel:4 },
+  { id:'corn',        name:'Corn',        days:85,  speed:'Medium', seedCost:6,  sellPrice:25, xp:16,  unlockLevel:4 },
+  { id:'broccoli',    name:'Broccoli',    days:90,  speed:'Medium', seedCost:7,  sellPrice:28, xp:18,  unlockLevel:4 },
+  { id:'capsicum',    name:'Capsicum',    days:80,  speed:'Medium', seedCost:10, sellPrice:42, xp:16,  unlockLevel:5 },
+  { id:'cauliflower', name:'Cauliflower', days:100, speed:'Medium', seedCost:8,  sellPrice:30, xp:16,  unlockLevel:5 },
+  { id:'sunflower',   name:'Sunflower',   days:100, speed:'Medium', seedCost:12, sellPrice:50, xp:20,  unlockLevel:6 },
+  { id:'onion',       name:'Onion',       days:110, speed:'Slow',   seedCost:6,  sellPrice:28, xp:20,  unlockLevel:6 },
+  { id:'potato',      name:'Potato',      days:105, speed:'Slow',   seedCost:7,  sellPrice:28, xp:20,  unlockLevel:6 },
+  { id:'pumpkin',     name:'Pumpkin',     days:105, speed:'Slow',   seedCost:8,  sellPrice:32, xp:22,  unlockLevel:7 },
+  { id:'garlic',      name:'Garlic',      days:150, speed:'Slow',   seedCost:20, sellPrice:90, xp:35,  unlockLevel:8 },
+];
+
+// Derive grow times from days × SECS_PER_DAY
+CROPS.forEach(c => c.gameSecs = Math.round(c.days * SECS_PER_DAY));
+
+const CROP_MAP = {};
+CROPS.forEach(c => CROP_MAP[c.id] = c);
+
+// ============================================================
+// LEVEL DATA
+// ============================================================
+const LEVELS = [
+  { lvl:1,  title:'Seedling',   xpMin:0,     xpMax:150,   unlocks:['radish','lettuce','spinach','zucchini'] },
+  { lvl:2,  title:'Sprout',     xpMin:151,   xpMax:500,   unlocks:['beans','peas','cucumber'] },
+  { lvl:3,  title:'Grower',     xpMin:501,   xpMax:1000,  unlocks:['beetroot','carrot','cabbage'] },
+  { lvl:4,  title:'Farmer',     xpMin:1001,  xpMax:2000,  unlocks:['tomato','corn','broccoli'] },
+  { lvl:5,  title:'Cultivator', xpMin:2001,  xpMax:3500,  unlocks:['capsicum','cauliflower'] },
+  { lvl:6,  title:'Harvester',  xpMin:3501,  xpMax:5500,  unlocks:['sunflower','onion','potato'] },
+  { lvl:7,  title:'Keeper',     xpMin:5501,  xpMax:8000,  unlocks:['pumpkin'] },
+  { lvl:8,  title:'Orchardist', xpMin:8001,  xpMax:11500, unlocks:['garlic'] },
+  { lvl:9,  title:'Elder',      xpMin:11501, xpMax:16000, unlocks:[] },
+  { lvl:10, title:'Master',     xpMin:16001, xpMax:99999, unlocks:[] },
+];
+
+// ============================================================
+// PLOT COSTS
+// ============================================================
+const PLOT_COSTS = [0,25,55,100,160,240,340,460,620,820,1050,1350,1700,2100,2600,3200,3900,4700,5700,6800];
+
+// ============================================================
+// SVG CROP ILLUSTRATIONS
+// (60x60 inner art, no background)
+// ============================================================
+function cropArt(id) {
+  const arts = {
+    radish: `
+      <rect x="27" y="8" width="3" height="10" rx="1.5" fill="#2E7D32"/>
+      <ellipse cx="19" cy="14" rx="7" ry="4" fill="#4CAF50" transform="rotate(-30 19 14)"/>
+      <ellipse cx="33" cy="13" rx="7" ry="4" fill="#66BB6A" transform="rotate(25 33 13)"/>
+      <ellipse cx="28" cy="9" rx="5" ry="4" fill="#A5D6A7"/>
+      <ellipse cx="28" cy="38" rx="13" ry="15" fill="#E91E63" stroke="#C2185B" stroke-width="1.5"/>
+      <ellipse cx="24" cy="33" rx="5" ry="7" fill="#F48FB1" opacity="0.45"/>
+      <path d="M28 52 Q30 56 28 59" stroke="#AD1457" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    lettuce: `
+      <ellipse cx="28" cy="46" rx="15" ry="9" fill="#1B5E20"/>
+      <ellipse cx="28" cy="42" rx="15" ry="10" fill="#2E7D32"/>
+      <ellipse cx="28" cy="37" rx="14" ry="9" fill="#388E3C"/>
+      <ellipse cx="28" cy="32" rx="13" ry="8" fill="#43A047"/>
+      <ellipse cx="28" cy="28" rx="11" ry="8" fill="#4CAF50"/>
+      <ellipse cx="28" cy="23" rx="9" ry="7" fill="#66BB6A"/>
+      <ellipse cx="28" cy="19" rx="7" ry="5" fill="#81C784"/>
+      <ellipse cx="28" cy="16" rx="5" ry="4" fill="#C8E6C9"/>`,
+
+    spinach: `
+      <ellipse cx="17" cy="40" rx="10" ry="14" fill="#2E7D32" transform="rotate(-18 17 40)"/>
+      <ellipse cx="38" cy="38" rx="10" ry="14" fill="#388E3C" transform="rotate(14 38 38)"/>
+      <ellipse cx="28" cy="36" rx="9" ry="13" fill="#43A047"/>
+      <ellipse cx="19" cy="24" rx="8" ry="11" fill="#4CAF50" transform="rotate(-8 19 24)"/>
+      <ellipse cx="36" cy="22" rx="8" ry="11" fill="#66BB6A" transform="rotate(8 36 22)"/>
+      <ellipse cx="28" cy="17" rx="7" ry="9" fill="#81C784"/>`,
+
+    zucchini: `
+      <ellipse cx="28" cy="36" rx="10" ry="22" fill="#2E7D32" stroke="#1B5E20" stroke-width="1"/>
+      <ellipse cx="28" cy="36" rx="7" ry="19" fill="#4CAF50"/>
+      <line x1="22" y1="20" x2="22" y2="50" stroke="#2E7D32" stroke-width="1" opacity="0.5"/>
+      <line x1="34" y1="20" x2="34" y2="50" stroke="#2E7D32" stroke-width="1" opacity="0.5"/>
+      <ellipse cx="28" cy="14" rx="8" ry="4" fill="#FFEE58"/>
+      <path d="M23 13 Q21 9 23 7" stroke="#4CAF50" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M33 13 Q35 9 33 7" stroke="#4CAF50" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    beans: `
+      <path d="M18 44 Q14 36 16 26 Q20 18 24 22 Q28 18 30 28 Q32 18 36 22 Q40 18 42 26 Q44 36 40 44 Q36 50 28 52 Q20 50 18 44Z" fill="#558B2F" stroke="#33691E" stroke-width="1.5"/>
+      <ellipse cx="22" cy="35" rx="3.5" ry="5" fill="#8BC34A"/>
+      <ellipse cx="28" cy="33" rx="3.5" ry="5" fill="#9CCC65"/>
+      <ellipse cx="34" cy="35" rx="3.5" ry="5" fill="#8BC34A"/>
+      <path d="M28 20 Q29 13 31 9" stroke="#4CAF50" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+
+    peas: `
+      <path d="M9 30 Q11 18 21 14 Q37 12 46 22 Q51 30 47 40 Q41 52 28 52 Q15 52 11 42 Q9 37 9 30Z" fill="#4CAF50" stroke="#388E3C" stroke-width="1.5"/>
+      <circle cx="19" cy="31" r="5.5" fill="#A5D6A7"/>
+      <circle cx="28" cy="29" r="5.5" fill="#A5D6A7"/>
+      <circle cx="37" cy="31" r="5.5" fill="#A5D6A7"/>
+      <path d="M37 12 Q44 6 48 9" stroke="#388E3C" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    cucumber: `
+      <ellipse cx="28" cy="34" rx="12" ry="21" fill="#388E3C" stroke="#2E7D32" stroke-width="1.5"/>
+      <ellipse cx="28" cy="34" rx="9" ry="18" fill="#4CAF50"/>
+      <ellipse cx="22" cy="27" r="2.5" fill="#2E7D32" opacity="0.65"/>
+      <ellipse cx="34" cy="29" r="2.5" fill="#2E7D32" opacity="0.65"/>
+      <ellipse cx="21" cy="37" r="2.5" fill="#2E7D32" opacity="0.65"/>
+      <ellipse cx="35" cy="39" r="2.5" fill="#2E7D32" opacity="0.65"/>
+      <ellipse cx="26" cy="45" r="2.5" fill="#2E7D32" opacity="0.65"/>
+      <ellipse cx="28" cy="13" rx="6" ry="3.5" fill="#FFEE58"/>
+      <path d="M22 13 Q20 9 22 7" stroke="#4CAF50" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    beetroot: `
+      <path d="M19 26 Q17 18 21 15 L28 12 L35 15 Q39 18 37 26Z" fill="#4CAF50"/>
+      <ellipse cx="21" cy="17" rx="5" ry="9" fill="#388E3C" transform="rotate(-18 21 17)"/>
+      <ellipse cx="35" cy="16" rx="5" ry="9" fill="#4CAF50" transform="rotate(14 35 16)"/>
+      <ellipse cx="28" cy="38" rx="14" ry="16" fill="#880E4F" stroke="#6A0136" stroke-width="1.5"/>
+      <ellipse cx="28" cy="38" rx="10" ry="12" fill="#AD1457"/>
+      <ellipse cx="23" cy="33" rx="4" ry="6" fill="#C2185B" opacity="0.4"/>
+      <path d="M28 53 Q29 57 28 59" stroke="#6A0136" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    carrot: `
+      <rect x="26" y="8" width="4" height="11" rx="2" fill="#388E3C"/>
+      <ellipse cx="19" cy="12" rx="7" ry="4" fill="#4CAF50" transform="rotate(-25 19 12)"/>
+      <ellipse cx="35" cy="12" rx="7" ry="4" fill="#66BB6A" transform="rotate(25 35 12)"/>
+      <ellipse cx="28" cy="8" rx="5" ry="4" fill="#81C784"/>
+      <path d="M16 22 Q14 36 28 56 Q42 36 40 22 Q34 18 28 19 Q22 18 16 22Z" fill="#FF9800" stroke="#E65100" stroke-width="1.5"/>
+      <path d="M20 25 Q19 40 28 54" stroke="#E65100" stroke-width="1" opacity="0.3" fill="none"/>
+      <path d="M36 25 Q37 40 28 54" stroke="#E65100" stroke-width="1" opacity="0.3" fill="none"/>`,
+
+    tomato: `
+      <path d="M28 17 Q32 13 34 17 L36 13 Q38 21 34 21 Q38 27 28 50 Q18 27 22 21 Q18 21 20 13 L22 17 Q24 13 28 17Z" fill="#4CAF50"/>
+      <circle cx="28" cy="37" r="15" fill="#F44336" stroke="#C62828" stroke-width="1.5"/>
+      <circle cx="28" cy="37" r="10" fill="#EF5350"/>
+      <ellipse cx="23" cy="32" rx="4" ry="5" fill="#E53935" opacity="0.5"/>`,
+
+    capsicum: `
+      <rect x="25" y="7" width="6" height="10" rx="3" fill="#388E3C"/>
+      <path d="M10 28 Q10 17 18 15 L24 15 L24 18 Q19 20 18 28 Q16 42 22 50 Q25 54 28 53Z" fill="#FFD600" stroke="#F9A825" stroke-width="1"/>
+      <path d="M46 28 Q46 17 38 15 L32 15 L32 18 Q37 20 38 28 Q40 42 34 50 Q31 54 28 53Z" fill="#FFD600" stroke="#F9A825" stroke-width="1"/>
+      <path d="M18 28 Q20 15 28 13 Q36 15 38 28 Q40 46 34 53 Q31 55 28 54 Q25 55 22 53 Q16 46 18 28Z" fill="#FFEE58" stroke="#FDD835" stroke-width="1.5"/>
+      <ellipse cx="24" cy="32" rx="3" ry="5" fill="#FFF9C4" opacity="0.7"/>`,
+
+    broccoli: `
+      <rect x="25" y="37" width="6" height="16" rx="3" fill="#558B2F" stroke="#33691E" stroke-width="1"/>
+      <path d="M22 39 Q16 35 16 27 Q16 19 22 17 L28 17Z" fill="#2E7D32"/>
+      <path d="M34 39 Q40 35 40 27 Q40 19 34 17 L28 17Z" fill="#388E3C"/>
+      <circle cx="20" cy="26" r="9" fill="#2E7D32" stroke="#1B5E20" stroke-width="1"/>
+      <circle cx="36" cy="26" r="9" fill="#388E3C" stroke="#2E7D32" stroke-width="1"/>
+      <circle cx="28" cy="21" r="11" fill="#4CAF50" stroke="#388E3C" stroke-width="1"/>
+      <circle cx="22" cy="19" r="5.5" fill="#43A047"/>
+      <circle cx="34" cy="19" r="5.5" fill="#66BB6A"/>
+      <circle cx="28" cy="15" r="5" fill="#81C784"/>`,
+
+    cabbage: `
+      <ellipse cx="28" cy="36" rx="18" ry="16" fill="#1B5E20"/>
+      <ellipse cx="28" cy="34" rx="16" ry="14" fill="#2E7D32"/>
+      <ellipse cx="28" cy="32" rx="14" ry="12" fill="#388E3C"/>
+      <ellipse cx="28" cy="30" rx="12" ry="10" fill="#43A047"/>
+      <ellipse cx="28" cy="28" rx="10" ry="8.5" fill="#4CAF50"/>
+      <ellipse cx="28" cy="26" rx="8" ry="7" fill="#66BB6A"/>
+      <ellipse cx="28" cy="24" rx="6" ry="5" fill="#A5D6A7"/>
+      <path d="M11 38 Q9 31 14 27 Q9 34 11 40Z" fill="#1B5E20"/>
+      <path d="M45 38 Q47 31 42 27 Q47 34 45 40Z" fill="#1B5E20"/>`,
+
+    cauliflower: `
+      <path d="M13 43 Q11 36 15 30 Q11 35 14 43Z" fill="#4CAF50"/>
+      <path d="M43 43 Q45 36 41 30 Q45 35 42 43Z" fill="#4CAF50"/>
+      <ellipse cx="28" cy="45" rx="18" ry="9" fill="#4CAF50"/>
+      <circle cx="20" cy="32" r="9" fill="#F5F5F5" stroke="#E0E0E0" stroke-width="1"/>
+      <circle cx="36" cy="32" r="9" fill="#FAFAFA" stroke="#E0E0E0" stroke-width="1"/>
+      <circle cx="28" cy="28" r="11" fill="#FAFAFA" stroke="#E0E0E0" stroke-width="1"/>
+      <circle cx="21" cy="25" r="6" fill="#F5F5F5"/>
+      <circle cx="35" cy="25" r="6" fill="#FAFAFA"/>
+      <circle cx="28" cy="21" r="7" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="0.5"/>
+      <circle cx="17" cy="29" r="5.5" fill="#F5F5F5"/>
+      <circle cx="39" cy="29" r="5.5" fill="#FAFAFA"/>`,
+
+    sunflower: `
+      <rect x="26" y="38" width="4" height="17" rx="2" fill="#558B2F"/>
+      <ellipse cx="21" cy="43" rx="6" ry="4" fill="#4CAF50" transform="rotate(-30 21 43)"/>
+      <ellipse cx="35" cy="45" rx="6" ry="4" fill="#66BB6A" transform="rotate(20 35 45)"/>
+      <circle cx="28" cy="24" r="14" fill="#FDD835" stroke="#FBC02D" stroke-width="2"/>
+      <circle cx="28" cy="24" r="7" fill="#5D4037" stroke="#4E342E" stroke-width="1"/>
+      <circle cx="26" cy="22" r="1.5" fill="#795548"/>
+      <circle cx="30" cy="22" r="1.5" fill="#795548"/>
+      <circle cx="28" cy="26" r="1.5" fill="#795548"/>
+      <line x1="28" y1="8" x2="28" y2="12" stroke="#FDD835" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="28" y1="36" x2="28" y2="40" stroke="#FDD835" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="12" y1="24" x2="16" y2="24" stroke="#FDD835" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="40" y1="24" x2="44" y2="24" stroke="#FDD835" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="17" y1="13" x2="20" y2="16" stroke="#FDD835" stroke-width="2" stroke-linecap="round"/>
+      <line x1="39" y1="13" x2="36" y2="16" stroke="#FDD835" stroke-width="2" stroke-linecap="round"/>
+      <line x1="17" y1="35" x2="20" y2="32" stroke="#FDD835" stroke-width="2" stroke-linecap="round"/>
+      <line x1="39" y1="35" x2="36" y2="32" stroke="#FDD835" stroke-width="2" stroke-linecap="round"/>`,
+
+    corn: `
+      <ellipse cx="28" cy="36" rx="12" ry="21" fill="#F9A825" stroke="#F57F17" stroke-width="1.5"/>
+      <ellipse cx="28" cy="36" rx="9" ry="18" fill="#FFD54F"/>
+      <rect x="14" y="16" width="10" height="37" rx="3" fill="#4CAF50" transform="rotate(-14 14 16)"/>
+      <rect x="36" y="16" width="10" height="37" rx="3" fill="#66BB6A" transform="rotate(14 36 16)"/>
+      <circle cx="23" cy="27" r="2.2" fill="#FFF176"/>
+      <circle cx="28" cy="27" r="2.2" fill="#FFF176"/>
+      <circle cx="33" cy="27" r="2.2" fill="#FFF176"/>
+      <circle cx="23" cy="33" r="2.2" fill="#FFF176"/>
+      <circle cx="28" cy="33" r="2.2" fill="#FFF176"/>
+      <circle cx="33" cy="33" r="2.2" fill="#FFF176"/>
+      <circle cx="23" cy="39" r="2.2" fill="#FFF176"/>
+      <circle cx="28" cy="39" r="2.2" fill="#FFF176"/>
+      <circle cx="33" cy="39" r="2.2" fill="#FFF176"/>
+      <circle cx="23" cy="45" r="2.2" fill="#FFD54F"/>
+      <circle cx="28" cy="45" r="2.2" fill="#FFD54F"/>
+      <circle cx="33" cy="45" r="2.2" fill="#FFD54F"/>
+      <path d="M28 15 Q30 10 29 7 Q33 5 35 9" stroke="#A1887F" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+
+    onion: `
+      <rect x="25" y="8" width="6" height="11" rx="3" fill="#7CB342"/>
+      <path d="M23 10 Q19 5 21 3" stroke="#9CCC65" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M33 10 Q37 5 35 3" stroke="#9CCC65" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="28" cy="37" rx="17" ry="19" fill="#7B1FA2" stroke="#6A1B9A" stroke-width="1.5"/>
+      <ellipse cx="28" cy="37" rx="12" ry="15" fill="#9C27B0"/>
+      <ellipse cx="28" cy="37" rx="8" ry="11" fill="#BA68C8"/>
+      <ellipse cx="28" cy="37" rx="4" ry="7" fill="#E1BEE7"/>
+      <path d="M19 24 Q28 20 37 24" stroke="#6A1B9A" stroke-width="1" fill="none" opacity="0.5"/>`,
+
+    potato: `
+      <ellipse cx="28" cy="36" rx="19" ry="17" fill="#795548" stroke="#5D4037" stroke-width="1.5"/>
+      <ellipse cx="28" cy="34" rx="16" ry="14" fill="#8D6E63"/>
+      <ellipse cx="21" cy="29" rx="4.5" ry="3.5" fill="#6D4C41" opacity="0.7"/>
+      <ellipse cx="37" cy="31" rx="3.5" ry="3" fill="#6D4C41" opacity="0.7"/>
+      <ellipse cx="24" cy="43" rx="3.5" ry="3" fill="#6D4C41" opacity="0.7"/>
+      <ellipse cx="35" cy="44" rx="4" ry="3" fill="#6D4C41" opacity="0.7"/>
+      <ellipse cx="19" cy="37" rx="2.5" ry="3.5" fill="#6D4C41" opacity="0.5"/>
+      <path d="M20 28 Q18 23 21 21" stroke="#A5D6A7" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <path d="M38 28 Q40 23 38 21" stroke="#A5D6A7" stroke-width="1.5" fill="none" stroke-linecap="round"/>`,
+
+    pumpkin: `
+      <ellipse cx="28" cy="39" rx="17" ry="15" fill="#FF8F00" stroke="#E65100" stroke-width="1.5"/>
+      <ellipse cx="14" cy="39" rx="8" ry="13" fill="#FFA000" stroke="#E65100" stroke-width="1"/>
+      <ellipse cx="28" cy="39" rx="9" ry="15" fill="#FFB300" stroke="#E65100" stroke-width="1"/>
+      <ellipse cx="42" cy="39" rx="8" ry="13" fill="#FFA000" stroke="#E65100" stroke-width="1"/>
+      <ellipse cx="28" cy="35" rx="16" ry="12" fill="#FFCA28" opacity="0.4"/>
+      <rect x="25" y="21" width="6" height="10" rx="3" fill="#558B2F"/>
+      <path d="M31 24 Q38 17 43 21" fill="none" stroke="#66BB6A" stroke-width="2" stroke-linecap="round"/>`,
+
+    garlic: `
+      <path d="M25 47 Q28 44 28 38 Q28 44 31 47 Q29 53 28 55 Q27 53 25 47Z" fill="#E0E0E0" stroke="#9E9E9E" stroke-width="0.5"/>
+      <ellipse cx="28" cy="35" rx="13" ry="15" fill="#FAFAFA" stroke="#BDBDBD" stroke-width="1"/>
+      <ellipse cx="21" cy="33" rx="5.5" ry="8" fill="#F5F5F5" stroke="#BDBDBD" stroke-width="0.5"/>
+      <ellipse cx="35" cy="33" rx="5.5" ry="8" fill="#F5F5F5" stroke="#BDBDBD" stroke-width="0.5"/>
+      <ellipse cx="28" cy="29" rx="5.5" ry="8" fill="#EEEEEE" stroke="#BDBDBD" stroke-width="0.5"/>
+      <path d="M23 31 Q25 29 27 31 M29 31 Q31 29 33 31" stroke="#9E9E9E" stroke-width="1" fill="none"/>
+      <rect x="25" y="18" width="6" height="13" rx="3" fill="#558B2F"/>`,
+  };
+  return arts[id] || '';
+}
+
+// Shop card SVG (40x40, colored background)
+const CROP_THEME = {
+  radish:      { bg:'#2A1825', border:'rgba(233,30,99,0.4)' },
+  lettuce:     { bg:'#122212', border:'rgba(76,175,80,0.4)' },
+  spinach:     { bg:'#121F12', border:'rgba(67,160,71,0.4)' },
+  zucchini:    { bg:'#122012', border:'rgba(46,125,50,0.4)' },
+  beans:       { bg:'#182212', border:'rgba(139,195,74,0.4)' },
+  peas:        { bg:'#162312', border:'rgba(102,187,106,0.4)' },
+  cucumber:    { bg:'#112018', border:'rgba(56,142,60,0.4)' },
+  beetroot:    { bg:'#241218', border:'rgba(136,14,79,0.4)' },
+  carrot:      { bg:'#251A0C', border:'rgba(255,152,0,0.4)' },
+  tomato:      { bg:'#280E0E', border:'rgba(244,67,54,0.4)' },
+  capsicum:    { bg:'#252000', border:'rgba(255,214,0,0.4)' },
+  broccoli:    { bg:'#142014', border:'rgba(85,139,47,0.4)' },
+  cabbage:     { bg:'#111F11', border:'rgba(46,125,50,0.4)' },
+  cauliflower: { bg:'#1E1E1E', border:'rgba(200,200,200,0.35)' },
+  sunflower:   { bg:'#252200', border:'rgba(253,216,53,0.4)' },
+  corn:        { bg:'#232100', border:'rgba(249,168,37,0.4)' },
+  onion:       { bg:'#1E0E25', border:'rgba(156,39,176,0.4)' },
+  potato:      { bg:'#1E1510', border:'rgba(121,85,72,0.4)' },
+  pumpkin:     { bg:'#251500', border:'rgba(255,152,0,0.4)' },
+  garlic:      { bg:'#1A1520', border:'rgba(189,189,189,0.35)' },
+};
+
+function makeCropCardSVG(cropId, w, h) {
+  return `<svg width="${w}" height="${h}" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(cropId)}</svg>`;
+}
+
+// Soil pattern SVG (for empty & growing plots)
+function soilSVG(w, h) {
+  return `<svg width="${w}" height="${h}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#5C3210"/>
+    <rect width="100" height="100" fill="#7A4422" opacity="0.5"/>
+    <line x1="16" y1="8" x2="16" y2="92" stroke="#4A2510" stroke-width="3" opacity="0.45"/>
+    <line x1="32" y1="8" x2="32" y2="92" stroke="#4A2510" stroke-width="3" opacity="0.45"/>
+    <line x1="48" y1="8" x2="48" y2="92" stroke="#4A2510" stroke-width="3" opacity="0.45"/>
+    <line x1="64" y1="8" x2="64" y2="92" stroke="#4A2510" stroke-width="3" opacity="0.45"/>
+    <line x1="80" y1="8" x2="80" y2="92" stroke="#4A2510" stroke-width="3" opacity="0.45"/>
+    <ellipse cx="24" cy="42" rx="5" ry="3" fill="#8B5A2B" opacity="0.5"/>
+    <ellipse cx="55" cy="65" rx="4" ry="2.5" fill="#8B5A2B" opacity="0.4"/>
+    <ellipse cx="73" cy="28" rx="4" ry="2.5" fill="#8B5A2B" opacity="0.4"/>
+  </svg>`;
+}
+
+// Seedling SVG for growing state
+function seedlingSVG(progress) {
+  const h = 8 + progress * 22; // stem grows from 8 to 30
+  const lw = 4 + progress * 8;
+  const lo = 0.3 + progress * 0.5;
+  return `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+    <rect x="${29}" y="${58 - h}" width="3" height="${h}" rx="1.5" fill="#2D6B20"/>
+    <ellipse cx="${26 - lw*0.3}" cy="${58 - h + 4}" rx="${lw}" ry="${lw*0.55}" fill="#4CAF50" opacity="${lo}" transform="rotate(-25 ${26 - lw*0.3} ${58 - h + 4})"/>
+    <ellipse cx="${34 + lw*0.3}" cy="${58 - h + 6}" rx="${lw}" ry="${lw*0.55}" fill="#66BB6A" opacity="${lo}" transform="rotate(25 ${34 + lw*0.3} ${58 - h + 6})"/>
+  </svg>`;
+}
+
+// Progress ring SVG
+function progressRingSVG(progress) {
+  const r = 44;
+  const cx = 50, cy = 50;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - progress);
+  return `<svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle class="progress-ring-bg" cx="${cx}" cy="${cy}" r="${r}" stroke-width="5"/>
+    <circle class="progress-ring-fill" cx="${cx}" cy="${cy}" r="${r}"
+      stroke-width="5"
+      stroke-dasharray="${circ.toFixed(2)}"
+      stroke-dashoffset="${offset.toFixed(2)}"/>
+  </svg>`;
+}
+
+// Lock SVG
+function lockSVG() {
+  return `<svg width="32" height="38" viewBox="0 0 32 38" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="16" width="24" height="20" rx="4" fill="#3A3A3A" stroke="#555" stroke-width="1.5"/>
+    <path d="M9 16 V11 Q9 3 16 3 Q23 3 23 11 V16" fill="none" stroke="#555" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="16" cy="25" r="4" fill="#666" stroke="#888" stroke-width="1"/>
+    <rect x="14.5" y="25" width="3" height="5" rx="1.5" fill="#666"/>
+  </svg>`;
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const DEFAULT_STATE = {
+  coins: 2,
+  totalXP: 0,
+  level: 1,
+  prestige: 0,          // 0-50; each prestige resets farm, grants +10% sell bonus
+  farmName: 'My Farm',    // editable, max 15 chars
+  farmerName: 'Farmer',   // editable, max 15 chars
+  selectedCrop: null,   // cropId selected from storage, ready to plant
+  shopExpanded: null,   // cropId whose qty picker is open in the shop
+  inventory: {},        // { cropId: count }
+  plots: Array.from({length:20}, (_, i) => ({
+    idx: i,
+    unlocked: i === 0,
+    harvestedCount: 0,
+    cropId: null,
+    plantedAt: null,
+    ready: false,
+  })),
+  walletConnected: false,
+  walletAddress: null,
+  cropHarvests: {},      // { cropId: totalCount } — lifetime, survives prestige
+  totalHarvestCount: 0, // lifetime total harvests
+  totalCoinsEarned: 0,  // lifetime coins earned from harvests
+  achievementsEarned: [], // array of achievement ids earned
+
+  lastEventTime: 0,      // ms timestamp of last random event
+  merchantActive: false, // is merchant banner showing?
+  merchantDeal: null,    // current deal object
+  merchantExpiry: 0,     // ms timestamp when merchant leaves
+};
+
+let G = null; // game state
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+const SAVE_KEY = 'idle_farm_v1';
+
+function saveGame() {
+  try {
+    const saveData = {
+      coins: G.coins,
+      totalXP: G.totalXP,
+      level: G.level,
+      prestige: G.prestige,
+      farmName: G.farmName,
+      farmerName: G.farmerName,
+      inventory: G.inventory,
+      plots: G.plots.map(p => ({
+        idx: p.idx,
+        unlocked: p.unlocked,
+        harvestedCount: p.harvestedCount,
+        cropId: p.cropId,
+        plantedAt: p.plantedAt,
+        ready: p.ready,
+      })),
+      walletConnected: G.walletConnected,
+      walletAddress: G.walletAddress,
+      cropHarvests: G.cropHarvests,
+      totalHarvestCount: G.totalHarvestCount,
+      totalCoinsEarned: G.totalCoinsEarned,
+      achievementsEarned: G.achievementsEarned,
+      lastEventTime: G.lastEventTime,
+      merchantExpiry: G.merchantExpiry,
+      merchantDeal: G.merchantDeal,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+  } catch(e) { console.warn('Save failed:', e); }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      G = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      G.coins = saved.coins ?? G.coins;
+      G.totalXP = saved.totalXP ?? G.totalXP;
+      G.level = saved.level ?? G.level;
+      G.prestige = saved.prestige ?? 0;
+      G.farmName = saved.farmName ?? 'My Farm';
+      G.farmerName = saved.farmerName ?? 'Farmer';
+      G.inventory = saved.inventory ?? {};
+      G.walletConnected = saved.walletConnected ?? false;
+      G.cropHarvests       = saved.cropHarvests       ?? {};
+      G.totalHarvestCount  = saved.totalHarvestCount  ?? 0;
+      G.totalCoinsEarned   = saved.totalCoinsEarned   ?? 0;
+      G.achievementsEarned = saved.achievementsEarned ?? [];
+      G.lastEventTime  = saved.lastEventTime  ?? 0;
+      G.merchantExpiry = saved.merchantExpiry ?? 0;
+      G.merchantDeal   = saved.merchantDeal   ?? null;
+      G.merchantActive = (saved.merchantDeal && saved.merchantExpiry > Date.now());
+      G.walletAddress = saved.walletAddress ?? null;
+      if (saved.plots) {
+        saved.plots.forEach((sp, i) => {
+          if (G.plots[i]) Object.assign(G.plots[i], sp);
+        });
+      }
+      G.selectedCrop = null;
+      G.shopExpanded = null;
+      return;
+    }
+  } catch(e) { console.warn('Load failed:', e); }
+  G = JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getLevelData(lvl) { return LEVELS[Math.min(lvl - 1, LEVELS.length - 1)]; }
+function getCurrentLevel() { return getLevelData(G.level); }
+
+function getAvailableCrops() {
+  return CROPS.filter(c => c.unlockLevel <= G.level);
+}
+
+function isCropUnlocked(cropId) {
+  const c = CROP_MAP[cropId];
+  return c && c.unlockLevel <= G.level;
+}
+
+// Prestige sell multiplier: each prestige adds 10%
+function prestigeMultiplier() {
+  return 1 + (G.prestige * 0.10);
+}
+
+// Perform a prestige reset (only at level 10, max 50 prestiges)
+function doPrestige() {
+  if (G.level < 10) {
+    notify('⚠️ Reach Level 10 (Master) to prestige!', 'error');
+    return;
+  }
+  if (G.prestige >= 50) {
+    notify('✨ Maximum prestige (50) already reached!', 'error');
+    return;
+  }
+  const nextPrestige = G.prestige + 1;
+  const bonus = Math.round(nextPrestige * 10);
+  if (!confirm('Prestige ' + nextPrestige + '/50\n\nThis resets your farm to level 1 with 2 coins, but ALL harvest coins will permanently earn +' + bonus + '% more.\n\nProceed?')) return;
+
+  G.prestige = nextPrestige;
+  G.coins = 2;
+  G.totalXP = 0;
+  G.level = 1;
+  G.selectedCrop = null;
+  G.shopExpanded = null;
+  G.inventory = {};
+  G.plots = Array.from({length:20}, (_, i) => ({
+    idx: i,
+    unlocked: i === 0,
+    harvestedCount: 0,
+    cropId: null,
+    plantedAt: null,
+    ready: false,
+  }));
+  checkAchievements();
+  saveGame();
+  renderAll();
+  notify('⭐ Prestige ' + nextPrestige + ' achieved! Sell bonus: +' + bonus + '%', 'levelup');
+}
+
+function calcFarmScore() {
+  return Math.floor(Math.pow(G.level, 2) * 300 + G.coins * 1 + G.totalXP * 0.5);
+}
+
+function formatTime(secs) {
+  if (secs <= 0) return 'Ready!';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function canUnlockPlot(idx) {
+  if (idx === 0) return true;
+  return G.plots[idx - 1].harvestedCount >= 1;
+}
+
+// ============================================================
+// GAME LOGIC
+// ============================================================
+
+// SHOP: toggle the qty picker for a crop card
+function toggleShopCard(cropId) {
+  const crop = CROP_MAP[cropId];
+  if (!crop) return;
+  if (!isCropUnlocked(cropId)) {
+    notify('🔒 Reach Level ' + crop.unlockLevel + ' to grow ' + crop.name + '!', 'error');
+    return;
+  }
+  G.shopExpanded = (G.shopExpanded === cropId) ? null : cropId;
+  renderShop();
+}
+
+// SHOP: stepper +/- buttons inside qty picker
+function shopChangeQty(cropId, delta) {
+  const el = document.getElementById('qty-val-' + cropId);
+  if (!el) return;
+  const crop = CROP_MAP[cropId];
+  let val = parseInt(el.textContent) + delta;
+  const maxAffordable = Math.max(1, Math.floor(G.coins / crop.seedCost));
+  val = Math.max(1, Math.min(10, Math.min(val, maxAffordable)));
+  el.textContent = val;
+  const totalEl = document.getElementById('qty-total-' + cropId);
+  if (totalEl) totalEl.textContent = '🪙 ' + (crop.seedCost * val);
+  const buyBtn = document.getElementById('buy-btn-' + cropId);
+  if (buyBtn) buyBtn.disabled = G.coins < crop.seedCost * val;
+}
+
+// SHOP: purchase seeds — coins deducted, seeds go to storage
+function buySeeds(cropId, qty) {
+  const crop = CROP_MAP[cropId];
+  if (!crop || qty < 1 || qty > 10) return;
+  const total = crop.seedCost * qty;
+  if (G.coins < total) {
+    notify('🪙 Need ' + total + ' coins for ' + qty + '× ' + crop.name + '!', 'error');
+    shakeStat('stat-coins');
+    return;
+  }
+  G.coins -= total;
+  G.inventory[cropId] = (G.inventory[cropId] || 0) + qty;
+  G.shopExpanded = null;
+  saveGame();
+  renderAll();
+  notify('🛒 Bought ' + qty + '× ' + crop.name + ' seed' + (qty > 1 ? 's' : '') + '! Check storage.', 'unlock');
+}
+
+// STORAGE: click a seed tile to select it for planting
+function selectFromStorage(cropId) {
+  if ((G.inventory[cropId] || 0) <= 0) return;
+  G.selectedCrop = (G.selectedCrop === cropId) ? null : cropId;
+  renderPlots();
+  renderStorage();
+}
+
+// PLOTS: tap an empty plot to plant the selected seed from storage
+function tryPlant(idx) {
+  const plot = G.plots[idx];
+  if (!plot.unlocked) { tryUnlockPlot(idx); return; }
+  if (plot.cropId) return;
+
+  if (!G.selectedCrop) {
+    notify('🏒 Select a seed from storage below the farm first!', 'error');
+    return;
+  }
+  const count = G.inventory[G.selectedCrop] || 0;
+  if (count <= 0) {
+    notify('🌱 No ' + CROP_MAP[G.selectedCrop].name + ' seeds left in storage!', 'error');
+    G.selectedCrop = null;
+    renderAll();
+    return;
+  }
+
+  const crop = CROP_MAP[G.selectedCrop];
+  G.inventory[G.selectedCrop] = count - 1;
+  if (G.inventory[G.selectedCrop] <= 0) delete G.inventory[G.selectedCrop];
+
+  plot.cropId = G.selectedCrop;
+  plot.plantedAt = Date.now();
+  plot.ready = false;
+
+  // Keep selection active if more seeds of this type remain
+  if (!(G.inventory[G.selectedCrop] > 0)) G.selectedCrop = null;
+
+  saveGame();
+  renderAll();
+  notify('🌱 Planted ' + crop.name + '! (' + formatTime(crop.gameSecs) + ')', 'harvest');
+}
+
+function tryUnlockPlot(idx) {
+  if (G.plots[idx].unlocked) return;
+  const cost = PLOT_COSTS[idx];
+  if (!canUnlockPlot(idx)) {
+    notify(`⚠️ Harvest from plot ${idx} first!`, 'error');
+    return;
+  }
+  if (G.coins < cost) {
+    notify(`🪙 Need ${cost} coins to unlock plot ${idx + 1}!`, 'error');
+    shakeStat('stat-coins');
+    return;
+  }
+  G.coins -= cost;
+  G.plots[idx].unlocked = true;
+  checkAchievements();
+  saveGame();
+  renderAll();
+  notify(`🔓 Plot ${idx + 1} unlocked!`, 'unlock');
+}
+
+function harvestCrop(idx) {
+  const plot = G.plots[idx];
+  if (!plot.ready) return;
+  const crop = CROP_MAP[plot.cropId];
+
+  const earnedCoins = applyEventModifiers(Math.floor(crop.sellPrice * prestigeMultiplier()));
+  G.coins += earnedCoins;
+  G.totalXP += crop.xp;
+  plot.harvestedCount++;
+  // Lifetime tracking (survives prestige)
+  G.cropHarvests[crop.id] = (G.cropHarvests[crop.id] || 0) + 1;
+  G.totalHarvestCount++;
+  G.totalCoinsEarned += earnedCoins;
+  const prevLevel = G.level;
+  checkLevelUp();
+  checkAchievements();
+  plot.cropId = null;
+  plot.plantedAt = null;
+  plot.ready = false;
+  saveGame();
+  renderAll();
+
+  // Floating coin label
+  showFloatLabel(`+🪙${earnedCoins}`, idx);
+  notify(`✨ Harvested ${crop.name}! +🪙${earnedCoins} +${crop.xp}XP`, 'harvest');
+
+  if (G.level > prevLevel) {
+    const ld = getLevelData(G.level);
+    setTimeout(() => notify(`🎉 Level Up! You're now ${ld.title} (Lv${G.level})!`, 'levelup'), 300);
+    if (ld.unlocks.length > 0) {
+      setTimeout(() => notify(`🆕 Unlocked: ${ld.unlocks.map(id => CROP_MAP[id].name).join(', ')}!`, 'unlock'), 700);
+    }
+  }
+}
+
+function checkLevelUp() {
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (G.totalXP >= LEVELS[i].xpMin) {
+      G.level = LEVELS[i].lvl;
+      return;
+    }
+  }
+  G.level = 1;
+}
+
+// ============================================================
+// TICK — runs every second
+// ============================================================
+function tick() {
+  let changed = false;
+  const now = Date.now();
+  G.plots.forEach(plot => {
+    if (plot.cropId && plot.plantedAt && !plot.ready) {
+      const crop = CROP_MAP[plot.cropId];
+      if (crop && (now - plot.plantedAt) >= crop.gameSecs * 1000) {
+        plot.ready = true;
+        changed = true;
+        notify(`✨ ${crop.name} is ready to harvest!`, 'harvest');
+      }
+    }
+  });
+  checkRandomEvent();
+  checkMerchant();
+  renderStats();
+  if (changed) {
+    saveGame();
+    renderPlots();
+    renderStorage();
+    renderShop();
+  } else {
+    renderPlotsOnly();
+  }
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function renderAll() {
+  renderStats();
+  renderHeading();
+  renderPlots();
+  renderStorage();
+  renderShop();
+}
+
+function renderStats() {
+  const ld = getCurrentLevel();
+  const nextLd = LEVELS[Math.min(G.level, LEVELS.length - 1)];
+  const xpInLevel = G.totalXP - ld.xpMin;
+  const xpNeeded = ld.xpMax - ld.xpMin;
+  const xpPct = Math.min((xpInLevel / xpNeeded) * 100, 100);
+
+  document.getElementById('stat-coins').textContent = G.coins;
+  document.getElementById('stat-level').textContent = G.level;
+  document.getElementById('stat-level-title').textContent = ld.title;
+  document.getElementById('stat-xp').textContent = G.totalXP;
+  document.getElementById('stat-xp-max').textContent = ld.xpMax;
+  document.getElementById('xp-fill').style.width = xpPct + '%';
+  document.getElementById('stat-score').textContent = calcFarmScore();
+
+  // Prestige pill
+  const pp = document.getElementById('prestige-pill');
+  if (pp) {
+    const p = G.prestige;
+    if (p > 0 || G.level >= 10) {
+      pp.style.display = 'flex';
+      const starsEl = document.getElementById('prestige-stars');
+      const bonusEl = document.getElementById('prestige-bonus');
+      // Stars: filled star per prestige, show up to 5 then show number
+      let starStr = '';
+      if (p === 0) {
+        starStr = '⭐ Prestige';
+      } else if (p <= 10) {
+        starStr = '⭐'.repeat(p);
+      } else {
+        starStr = '⭐×' + p;
+      }
+      if (starsEl) starsEl.textContent = starStr;
+      if (bonusEl) bonusEl.textContent = p > 0 ? '+' + (p*10) + '%' : '';
+      pp.className = 'prestige-pill';
+      if (p >= 50) pp.classList.add('max');
+      if (G.level >= 10 && p < 50) pp.classList.add('prestige-ready');
+    } else {
+      pp.style.display = 'none';
+    }
+  }
+
+  // BSV status
+  const bsvStatus = document.getElementById('bsv-status');
+  if (G.walletConnected) {
+    bsvStatus.textContent = '₿ ' + G.walletAddress.substring(0,8) + '…';
+  } else {
+    bsvStatus.textContent = 'Wallet: Local Mode';
+  }
+}
+
+function renderPlotsOnly() {
+  const grid = document.getElementById('plots-grid');
+  if (!grid) return;
+  const now = Date.now();
+  G.plots.forEach((plot, idx) => {
+    const tile = grid.querySelector(`[data-idx="${idx}"]`);
+    if (!tile) return;
+    if (plot.cropId && !plot.ready && plot.plantedAt) {
+      const crop = CROP_MAP[plot.cropId];
+      const elapsed = now - plot.plantedAt;
+      const progress = Math.min(elapsed / (crop.gameSecs * 1000), 1);
+      const remaining = Math.max(crop.gameSecs - elapsed/1000, 0);
+      const scale = 0.2 + progress * 0.6;
+      const opacity = 0.4 + progress * 0.6;
+
+      const artEl = tile.querySelector('.crop-art');
+      if (artEl) {
+        artEl.style.transform = `scale(${scale.toFixed(3)}) translateY(${(-(scale*8)).toFixed(1)}px)`;
+        artEl.style.opacity = opacity.toFixed(3);
+      }
+
+      // Update progress ring
+      const ringFill = tile.querySelector('.progress-ring-fill');
+      if (ringFill) {
+        const r = 44;
+        const circ = 2 * Math.PI * r;
+        ringFill.setAttribute('stroke-dashoffset', (circ * (1 - progress)).toFixed(2));
+      }
+
+      // Footer time
+      const footer = tile.querySelector('.plot-footer');
+      if (footer) footer.textContent = `${crop.name} — ${formatTime(remaining)}`;
+    }
+  });
+}
+
+function renderPlots() {
+  const grid = document.getElementById('plots-grid');
+  if (!grid) return;
+  const now = Date.now();
+
+  grid.innerHTML = G.plots.map((plot, idx) => {
+    const cost = PLOT_COSTS[idx];
+
+    // LOCKED
+    if (!plot.unlocked) {
+      const canAfford = G.coins >= cost;
+      const prevHarvested = idx === 0 || G.plots[idx-1].harvestedCount >= 1;
+      return `<div class="plot-tile locked" data-idx="${idx}" onclick="tryUnlockPlot(${idx})">
+        <div class="plot-visual" style="background:#131310;border:2px solid rgba(255,255,255,0.05)">
+          <div class="plot-overlay" style="flex-direction:column;gap:4px">
+            ${lockSVG()}
+          </div>
+          <div class="plot-label" style="color:${canAfford?'#FFD140':'#888'}">🪙 ${cost}</div>
+        </div>
+        <div class="plot-footer">Plot ${idx+1}${!prevHarvested ? ' — harvest first' : canAfford ? ' — tap to unlock' : ' — need coins'}</div>
+      </div>`;
+    }
+
+    // EMPTY
+    if (!plot.cropId) {
+      const isTarget = G.selectedCrop !== null && (G.inventory[G.selectedCrop] || 0) > 0;
+      let overlayContent = '';
+      if (isTarget) {
+        overlayContent = `<div style="opacity:0.55;transform:scale(0.7)">${makeCropCardSVG(G.selectedCrop, 50, 50)}</div>`;
+      } else {
+        overlayContent = `<span class="plus-sign">+</span>`;
+      }
+      return `<div class="plot-tile empty ${isTarget?'plant-target':''}" data-idx="${idx}" onclick="tryPlant(${idx})">
+        <div class="plot-visual">
+          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+          <div class="plot-overlay">${overlayContent}</div>
+        </div>
+        <div class="plot-footer">Plot ${idx+1} — ${isTarget?'Tap to plant':' Empty'}</div>
+      </div>`;
+    }
+
+    const crop = CROP_MAP[plot.cropId];
+
+    // READY
+    if (plot.ready) {
+      return `<div class="plot-tile ready" data-idx="${idx}" onclick="harvestCrop(${idx})">
+        <div class="plot-visual">
+          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+          <div class="plot-overlay" style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">
+            <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(plot.cropId)}</svg>
+          </div>
+        </div>
+        <div class="plot-footer"><span class="footer-harvest">✨ Harvest! +🪙${crop.sellPrice}</span></div>
+      </div>`;
+    }
+
+    // GROWING
+    const elapsed = now - plot.plantedAt;
+    const progress = Math.min(elapsed / (crop.gameSecs * 1000), 1);
+    const remaining = Math.max(crop.gameSecs - elapsed/1000, 0);
+    const scale = 0.2 + progress * 0.6;
+    const opacity = 0.4 + progress * 0.6;
+    const r = 44;
+    const circ = 2 * Math.PI * r;
+    const offset = circ * (1 - progress);
+
+    return `<div class="plot-tile growing" data-idx="${idx}">
+      <div class="plot-visual">
+        <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+        <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <div class="crop-art" style="transform:scale(${scale.toFixed(3)}) translateY(${(-(scale*8)).toFixed(1)}px);opacity:${opacity.toFixed(3)};transform-origin:center center">
+            <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(plot.cropId)}</svg>
+          </div>
+        </div>
+        <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle class="progress-ring-bg" cx="50" cy="50" r="${r}" stroke-width="5"/>
+          <circle class="progress-ring-fill" cx="50" cy="50" r="${r}"
+            stroke-width="5"
+            stroke-dasharray="${circ.toFixed(2)}"
+            stroke-dashoffset="${offset.toFixed(2)}"/>
+        </svg>
+      </div>
+      <div class="plot-footer">${crop.name} — ${formatTime(remaining)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderStorage() {
+  const grid = document.getElementById('storage-grid');
+  const badge = document.getElementById('storage-count-badge');
+  if (!grid) return;
+
+  const entries = Object.entries(G.inventory).filter(([,qty]) => qty > 0);
+  // Sort by crop order so it's consistent
+  entries.sort((a, b) => {
+    const ai = CROPS.findIndex(c => c.id === a[0]);
+    const bi = CROPS.findIndex(c => c.id === b[0]);
+    return ai - bi;
+  });
+
+  if (badge) {
+    if (entries.length === 0) {
+      badge.textContent = 'empty';
+    } else {
+      const total = entries.reduce((s, [,q]) => s + q, 0);
+      badge.textContent = entries.length + ' type' + (entries.length !== 1 ? 's' : '') + ', ' + total + ' seed' + (total !== 1 ? 's' : '');
+    }
+  }
+
+  if (entries.length === 0) {
+    grid.innerHTML = '<div class="storage-empty">No seeds yet — buy some from the shop →</div>';
+    return;
+  }
+
+  grid.innerHTML = entries.map(([cropId, qty]) => {
+    const crop = CROP_MAP[cropId];
+    const theme = CROP_THEME[cropId] || { bg: '#1A1A1A' };
+    const selected = G.selectedCrop === cropId;
+    return `<div class="seed-tile${selected ? ' selected' : ''}" onclick="selectFromStorage('${cropId}')" title="${crop.name}: ${qty} seed${qty !== 1 ? 's' : ''}">
+      <div class="seed-tile-art" style="background:${theme.bg}">
+        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(cropId)}</svg>
+        <span class="seed-tile-count">${qty}</span>
+      </div>
+      <div class="seed-tile-name">${crop.name}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderShop() {
+  const list = document.getElementById('shop-crops-list');
+  const banner = document.getElementById('selected-banner');
+  if (!list) return;
+
+  // Show which seed is selected for planting (pulled from storage)
+  if (G.selectedCrop) {
+    const sc = CROP_MAP[G.selectedCrop];
+    const qty = G.inventory[G.selectedCrop] || 0;
+    banner.innerHTML = `<div class="selected-indicator">
+      <svg width="18" height="18" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(G.selectedCrop)}</svg>
+      ${sc.name} ×${qty} ready to plant
+      <button onclick="G.selectedCrop=null;renderPlots();renderStorage();">✕</button>
+    </div>`;
+  } else {
+    banner.innerHTML = '';
+  }
+
+  // Group crops by unlock level
+  const grouped = {};
+  CROPS.forEach(c => {
+    if (!grouped[c.unlockLevel]) grouped[c.unlockLevel] = [];
+    grouped[c.unlockLevel].push(c);
+  });
+  const sortedLevels = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+
+  list.innerHTML = sortedLevels.map(lvl => {
+    const ld = getLevelData(lvl);
+    const cropsHtml = grouped[lvl].map(crop => {
+      const unlocked = isCropUnlocked(crop.id);
+      const affordable = G.coins >= crop.seedCost;
+      const expanded = G.shopExpanded === crop.id;
+      const theme = CROP_THEME[crop.id] || { bg: '#1A1A1A', border: 'rgba(255,255,255,0.2)' };
+      const inStock = G.inventory[crop.id] || 0;
+
+      let classes = 'crop-card';
+      if (expanded) classes += ' expanded';
+      if (!unlocked) classes += ' locked-crop';
+
+      const artSvg = `<svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:7px">${cropArt(crop.id)}</svg>`;
+
+      // Stock badge (seeds in storage)
+      const stockBadge = inStock > 0
+        ? `<span style="font-size:9px;background:rgba(111,207,58,0.2);color:var(--green-hi);border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">×${inStock}</span>`
+        : '';
+
+      // Lock / level badge
+      const lockBadge = !unlocked
+        ? `<span class="crop-lock-badge">Lv${crop.unlockLevel}</span>`
+        : '';
+
+      const mainRow = `<div class="crop-card-main">
+        <div class="crop-card-icon">${artSvg}</div>
+        <div class="crop-card-info">
+          <div class="crop-card-name">${crop.name}${stockBadge}</div>
+          <div class="crop-card-stats">
+            <span class="crop-stat-coin">🪙${crop.seedCost}</span>
+            <span class="crop-stat-sell">→${crop.sellPrice}</span>
+            <span class="crop-stat-time">${formatTime(crop.gameSecs)}</span>
+          </div>
+        </div>
+        ${lockBadge}
+      </div>`;
+
+      let qtyPicker = '';
+      if (expanded && unlocked) {
+        const initQty = Math.min(1, Math.max(1, Math.floor(G.coins / crop.seedCost)));
+        const canAfford = G.coins >= crop.seedCost;
+        qtyPicker = `<div class="crop-card-qty">
+          <button class="qty-btn" onclick="event.stopPropagation();shopChangeQty('${crop.id}',-1)">−</button>
+          <span class="qty-display" id="qty-val-${crop.id}">${initQty}</span>
+          <button class="qty-btn" onclick="event.stopPropagation();shopChangeQty('${crop.id}',1)">+</button>
+          <span class="qty-total" id="qty-total-${crop.id}">🪙 ${crop.seedCost * initQty}</span>
+          <button class="buy-btn" id="buy-btn-${crop.id}"
+            onclick="event.stopPropagation();buySeeds('${crop.id}',parseInt(document.getElementById('qty-val-${crop.id}').textContent))"
+            ${canAfford ? '' : 'disabled'}>Buy</button>
+        </div>`;
+      }
+
+      return `<div class="${classes}" onclick="toggleShopCard('${crop.id}')">
+        ${mainRow}
+        ${qtyPicker}
+      </div>`;
+    }).join('');
+
+    const dimmed = lvl > G.level ? 'opacity:0.35' : '';
+    return `<div class="shop-level-divider" style="${dimmed}">Level ${lvl} — ${ld.title}</div>${cropsHtml}`;
+  }).join('');
+}
+
+// ============================================================
+// NAME EDITING
+// ============================================================
+function startEditName(which) {
+  const isF = which === 'farm';
+  const displayId = isF ? 'farm-name-display' : 'farmer-name-display';
+  const displayEl = document.getElementById(displayId);
+  if (!displayEl) return;
+  if (displayEl.parentElement.querySelector('.name-input')) return;
+
+  const current = isF ? G.farmName : G.farmerName;
+  const input = document.createElement('input');
+  input.className = 'name-input';
+  input.maxLength = 15;
+  input.value = current;
+  input.style.fontSize = isF ? '16px' : '14px';
+
+  displayEl.style.display = 'none';
+  displayEl.parentElement.insertBefore(input, displayEl);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const val = input.value.trim().slice(0, 15) || (isF ? 'My Farm' : 'Farmer');
+    if (isF) { G.farmName = val; } else { G.farmerName = val; }
+    saveGame();
+    renderHeading();
+    input.remove();
+    displayEl.style.display = '';
+  }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { input.remove(); displayEl.style.display = ''; }
+  });
+}
+
+function renderHeading() {
+  const fn = document.getElementById('farm-name-display');
+  const fr = document.getElementById('farmer-name-display');
+  if (fn) fn.textContent = '🌿 ' + (G.farmName || 'My Farm');
+  if (fr) fr.textContent = G.farmerName || 'Farmer';
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+function notify(msg, type='harvest') {
+  const container = document.getElementById('notif-container');
+  const el = document.createElement('div');
+  el.className = `notif ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 350);
+  }, 2800);
+}
+
+function shakeStat(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.parentElement.classList.add('shake');
+  setTimeout(() => el.parentElement.classList.remove('shake'), 450);
+}
+
+function showFloatLabel(text, plotIdx) {
+  const grid = document.getElementById('plots-grid');
+  if (!grid) return;
+  const tile = grid.querySelector(`[data-idx="${plotIdx}"]`);
+  if (!tile) return;
+  const rect = tile.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'float-label';
+  el.textContent = text;
+  el.style.left = (rect.left + rect.width/2 - 20) + 'px';
+  el.style.top = (rect.top) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 950);
+}
+
+// ============================================================
+// RANDOM EVENTS
+// ============================================================
+
+const RANDOM_EVENTS = [
+  {
+    id: 'aphids',
+    icon: '🐛',
+    title: 'Aphid Outbreak!',
+    desc: 'A swarm of aphids is attacking your crops! Spend {cost} coins on pesticide to protect your harvest, or risk losing 20% yield on your next harvest.',
+    cost: (lvl) => Math.max(2, lvl * 2),
+    fixLabel: (cost) => 'Spray (🪙' + cost + ')',
+    onFix: () => { notify('🐛 Aphids defeated! Crops safe.', 'harvest'); },
+    onIgnore: () => {
+      G._aphidPenalty = true;
+      notify('🐛 Aphids munching… next harvest reduced!', 'error');
+    },
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+  {
+    id: 'rain',
+    icon: '🌧️',
+    title: 'Surprise Rain!',
+    desc: 'A warm summer shower rolls through! All growing crops get a 15% speed boost — no action needed.',
+    cost: () => 0,
+    fixLabel: () => 'Great!',
+    onFix: () => {
+      let boosted = 0;
+      G.plots.forEach(p => {
+        if (p.cropId && p.plantedAt && !p.ready) {
+          const crop = CROP_MAP[p.cropId];
+          const elapsed = Date.now() - p.plantedAt;
+          const remaining = Math.max(0, crop.gameSecs * 1000 - elapsed);
+          p.plantedAt -= Math.floor(remaining * 0.15);
+          boosted++;
+        }
+      });
+      if (boosted) { saveGame(); renderPlots(); }
+      notify('🌧️ Rain boosted ' + boosted + ' crop' + (boosted !== 1 ? 's' : '') + ' by 15%!', 'harvest');
+    },
+    onIgnore: null,
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+  {
+    id: 'crow',
+    icon: '🐦',
+    title: 'Crows in the Storage!',
+    desc: 'A flock of crows has raided your seed storage and stolen some seeds! Spend {cost} coins on a scarecrow to protect the rest, or lose {steal} seeds.',
+    cost: (lvl) => Math.max(3, Math.floor(lvl * 1.5)),
+    fixLabel: (cost) => 'Scarecrow (🪙' + cost + ')',
+    onFix: () => { notify('🐦 Scarecrow deployed! Seeds safe.', 'harvest'); },
+    onIgnore: () => {
+      const ids = Object.keys(G.inventory);
+      if (ids.length > 0) {
+        const target = ids[Math.floor(Math.random() * ids.length)];
+        const stolen = Math.min(G.inventory[target], Math.ceil(G.inventory[target] * 0.3) || 1);
+        G.inventory[target] -= stolen;
+        if (G.inventory[target] <= 0) delete G.inventory[target];
+        saveGame(); renderStorage();
+        notify('🐦 Crows stole ' + stolen + ' ' + CROP_MAP[target].name + ' seed' + (stolen !== 1 ? 's' : '') + '!', 'error');
+      } else {
+        notify('🐦 Crows found nothing to steal. Lucky!', 'harvest');
+      }
+    },
+    canTrigger: () => Object.keys(G.inventory).length > 0,
+  },
+  {
+    id: 'sun',
+    icon: '☀️',
+    title: 'Bumper Sun Day!',
+    desc: 'The sun is blazing! Your next harvest will earn +25% bonus coins. No action needed — enjoy the warmth!',
+    cost: () => 0,
+    fixLabel: () => 'Wonderful!',
+    onFix: () => {
+      G._sunBonus = true;
+      notify('☀️ Sun bonus active! Next harvest +25%!', 'unlock');
+    },
+    onIgnore: null,
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+  {
+    id: 'rabbit',
+    icon: '🐇',
+    title: 'Rabbit on the Loose!',
+    desc: 'A hungry rabbit has hopped into your farm. Pay {cost} coins to shoo it away, or it will delay one of your crops by 30 seconds.',
+    cost: (lvl) => Math.max(2, lvl),
+    fixLabel: (cost) => 'Shoo it! (🪙' + cost + ')',
+    onFix: () => { notify('🐇 Rabbit chased off! All clear.', 'harvest'); },
+    onIgnore: () => {
+      const targets = G.plots.filter(p => p.cropId && p.plantedAt && !p.ready);
+      if (targets.length > 0) {
+        const t = targets[Math.floor(Math.random() * targets.length)];
+        t.plantedAt += 30000;
+        saveGame(); renderPlots();
+        notify('🐇 Rabbit delayed a crop by 30 seconds!', 'error');
+      }
+    },
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+  {
+    id: 'bees',
+    icon: '🐝',
+    title: 'Wild Bee Swarm!',
+    desc: 'A wild bee colony has settled nearby and is pollinating your crops! All growing crops finish 20% faster. No action needed!',
+    cost: () => 0,
+    fixLabel: () => 'Buzz-tastic!',
+    onFix: () => {
+      let boosted = 0;
+      G.plots.forEach(p => {
+        if (p.cropId && p.plantedAt && !p.ready) {
+          const crop = CROP_MAP[p.cropId];
+          const elapsed = Date.now() - p.plantedAt;
+          const remaining = Math.max(0, crop.gameSecs * 1000 - elapsed);
+          p.plantedAt -= Math.floor(remaining * 0.20);
+          boosted++;
+        }
+      });
+      if (boosted) { saveGame(); renderPlots(); }
+      notify('🐝 Bees boosted ' + boosted + ' crop' + (boosted !== 1 ? 's' : '') + ' by 20%!', 'harvest');
+    },
+    onIgnore: null,
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+];
+
+// Mins → ms helpers
+const EVENT_MIN_GAP  = 2 * 60 * 1000;  // at least 2 min between events
+const EVENT_MAX_GAP  = 5 * 60 * 1000;  // at most  5 min
+let _nextEventTime = 0; // absolute ms for next possible event
+
+function scheduleNextEvent() {
+  const gap = EVENT_MIN_GAP + Math.random() * (EVENT_MAX_GAP - EVENT_MIN_GAP);
+  _nextEventTime = Date.now() + gap;
+}
+
+function checkRandomEvent() {
+  if (Date.now() < _nextEventTime) return;
+  // Don't stack on top of merchant or another event
+  if (!document.getElementById('event-overlay').classList.contains('hidden')) return;
+  if (G.merchantActive) return;
+
+  const eligible = RANDOM_EVENTS.filter(e => e.canTrigger());
+  if (eligible.length === 0) { scheduleNextEvent(); return; }
+
+  const ev = eligible[Math.floor(Math.random() * eligible.length)];
+  showEventModal(ev);
+  scheduleNextEvent();
+}
+
+function showEventModal(ev) {
+  const cost = ev.cost(G.level);
+  const canAfford = G.coins >= cost;
+  const descText = ev.desc
+    .replace('{cost}', cost)
+    .replace('{steal}', '30%');
+
+  document.getElementById('event-icon').textContent  = ev.icon;
+  document.getElementById('event-title').textContent = ev.title;
+  document.getElementById('event-desc').textContent  = descText;
+
+  const btns = document.getElementById('event-btns');
+  const fixLabel = ev.fixLabel(cost);
+
+  let html = '<button class="event-btn-primary" id="ev-fix-btn"'
+    + ((!canAfford && cost > 0) ? ' disabled' : '')
+    + ' onclick="resolveEvent(true)">' + fixLabel + '</button>';
+
+  if (ev.onIgnore !== null) {
+    html += '<button class="event-btn-secondary" onclick="resolveEvent(false)">Ignore</button>';
+  }
+
+  btns.innerHTML = html;
+  document.getElementById('event-overlay').classList.remove('hidden');
+  G._eventsEncountered = (G._eventsEncountered || 0) + 1;
+
+  // Store current event for resolving
+  window._currentEvent = { ev, cost };
+}
+
+function resolveEvent(fix) {
+  const { ev, cost } = window._currentEvent || {};
+  if (!ev) return;
+  document.getElementById('event-overlay').classList.add('hidden');
+  window._currentEvent = null;
+
+  if (fix) {
+    if (cost > 0) {
+      if (G.coins < cost) { notify('🪙 Not enough coins!', 'error'); return; }
+      G.coins -= cost;
+    }
+    if (cost > 0) G._eventsFixed = (G._eventsFixed || 0) + 1;
+    // Track specific event types for achievements
+    if (ev.id === 'sun')  G._sunBonusCount  = (G._sunBonusCount  || 0) + 1;
+    if (ev.id === 'bees') G._beeBoostCount  = (G._beeBoostCount  || 0) + 1;
+    ev.onFix();
+  } else if (ev.onIgnore) {
+    ev.onIgnore();
+  }
+  saveGame();
+  renderAll();
+}
+
+// Apply sun / aphid bonuses to harvest (called from harvestCrop)
+function applyEventModifiers(baseCoins) {
+  let coins = baseCoins;
+  if (G._sunBonus) { coins = Math.floor(coins * 1.25); G._sunBonus = false; }
+  if (G._aphidPenalty) { coins = Math.floor(coins * 0.80); G._aphidPenalty = false; }
+  return coins;
+}
+
+// ============================================================
+// WANDERING MERCHANT
+// ============================================================
+
+const MERCHANT_DEALS = [
+  {
+    id: 'seed_discount',
+    title: '🧙 Wandering Merchant',
+    makeOffer: () => {
+      const unlocked = CROPS.filter(c => c.unlockLevel <= G.level);
+      const crop = unlocked[Math.floor(Math.random() * unlocked.length)];
+      const qty = Math.floor(Math.random() * 3) + 3; // 3-5
+      const fullPrice = crop.seedCost * qty;
+      const discountPct = [20, 25, 30, 40][Math.floor(Math.random() * 4)];
+      const dealPrice = Math.max(1, Math.floor(fullPrice * (1 - discountPct / 100)));
+      return {
+        cropId: crop.id,
+        qty,
+        fullPrice,
+        dealPrice,
+        discountPct,
+        offerText: qty + '× ' + crop.name + ' seeds for 🪙' + dealPrice + ' (was ' + fullPrice + ', −' + discountPct + '%)',
+        btnText: 'Buy 🪙' + dealPrice,
+        canAfford: () => G.coins >= dealPrice,
+        execute: () => {
+          G.coins -= dealPrice;
+          G.inventory[crop.id] = (G.inventory[crop.id] || 0) + qty;
+          notify('🛒 Got ' + qty + '× ' + crop.name + ' at −' + discountPct + '%!', 'unlock');
+        },
+      };
+    },
+  },
+  {
+    id: 'buy_coins',
+    title: '🧙 Wandering Merchant',
+    makeOffer: () => {
+      const bonus = (Math.floor(Math.random() * 4) + 2) * 5; // 10-30 coins
+      const cost = Math.max(3, Math.floor(bonus * 0.6));
+      return {
+        offerText: 'Lucky charm! Pay 🪙' + cost + ' now, receive 🪙' + bonus + ' back instantly.',
+        btnText: 'Buy 🪙' + cost,
+        canAfford: () => G.coins >= cost,
+        execute: () => {
+          G.coins += (bonus - cost);
+          notify('🍀 Lucky charm! +🪙' + (bonus - cost) + ' net gain!', 'unlock');
+        },
+      };
+    },
+  },
+  {
+    id: 'xp_boost',
+    title: '🧙 Wandering Merchant',
+    makeOffer: () => {
+      const xpGain = (Math.floor(Math.random() * 4) + 2) * 10; // 20-50
+      const cost = Math.max(4, Math.floor(xpGain * 0.4));
+      return {
+        offerText: 'Ancient almanac! Pay 🪙' + cost + ' for +'  + xpGain + ' XP immediately.',
+        btnText: 'Study (🪙' + cost + ')',
+        canAfford: () => G.coins >= cost,
+        execute: () => {
+          G.coins -= cost;
+          G.totalXP += xpGain;
+          const prev = G.level;
+          checkLevelUp();
+          notify('📚 +' + xpGain + ' XP from the almanac!', 'harvest');
+          if (G.level > prev) {
+            const ld = getLevelData(G.level);
+            setTimeout(() => notify('🎉 Level Up! ' + ld.title + ' (Lv' + G.level + ')!', 'levelup'), 300);
+          }
+        },
+      };
+    },
+  },
+  {
+    id: 'speed_tonic',
+    title: '🧙 Wandering Merchant',
+    makeOffer: () => {
+      const pct = [15, 20, 25][Math.floor(Math.random() * 3)];
+      const growingCount = G.plots.filter(p => p.cropId && !p.ready).length;
+      const cost = Math.max(5, growingCount * 3);
+      return {
+        offerText: 'Growth tonic! Pay 🪙' + cost + ' to speed all growing crops up by ' + pct + '% instantly.',
+        btnText: 'Buy tonic (🪙' + cost + ')',
+        canAfford: () => G.coins >= cost,
+        execute: () => {
+          G.coins -= cost;
+          let boosted = 0;
+          G.plots.forEach(p => {
+            if (p.cropId && p.plantedAt && !p.ready) {
+              const crop = CROP_MAP[p.cropId];
+              const elapsed = Date.now() - p.plantedAt;
+              const remaining = Math.max(0, crop.gameSecs * 1000 - elapsed);
+              p.plantedAt -= Math.floor(remaining * (pct / 100));
+              boosted++;
+            }
+          });
+          saveGame(); renderPlots();
+          notify('🧪 Tonic boosted ' + boosted + ' crop' + (boosted !== 1 ? 's' : '') + ' by ' + pct + '%!', 'harvest');
+        },
+      };
+    },
+    canTrigger: () => G.plots.some(p => p.cropId && !p.ready),
+  },
+];
+
+const MERCHANT_DURATION = 3 * 60 * 1000; // 3 min window
+const MERCHANT_MIN_GAP  = 10 * 60 * 1000;
+const MERCHANT_MAX_GAP  = 15 * 60 * 1000;
+let _nextMerchantTime = 0;
+
+function scheduleNextMerchant() {
+  const gap = MERCHANT_MIN_GAP + Math.random() * (MERCHANT_MAX_GAP - MERCHANT_MIN_GAP);
+  _nextMerchantTime = Date.now() + gap;
+}
+
+function checkMerchant() {
+  const now = Date.now();
+
+  // If merchant is active, update timer or dismiss if expired
+  if (G.merchantActive) {
+    const remaining = Math.max(0, G.merchantExpiry - now);
+    const timerEl = document.getElementById('merchant-timer');
+    if (timerEl) timerEl.textContent = 'Leaves in ' + formatTime(remaining / 1000);
+    if (remaining <= 0) dismissMerchant();
+    return;
+  }
+
+  if (now < _nextMerchantTime) return;
+  if (!document.getElementById('event-overlay').classList.contains('hidden')) return;
+
+  spawnMerchant();
+}
+
+function spawnMerchant() {
+  // Pick a random deal type; filter ones needing crops if none growing
+  const available = MERCHANT_DEALS.filter(d => !d.canTrigger || d.canTrigger());
+  if (available.length === 0) { scheduleNextMerchant(); return; }
+
+  const dealType = available[Math.floor(Math.random() * available.length)];
+  const deal = dealType.makeOffer();
+
+  G.merchantActive = true;
+  G.merchantDeal = { ...deal, execute: null }; // store serialisable parts
+  G.merchantExpiry = Date.now() + MERCHANT_DURATION;
+
+  // Keep the live execute fn in memory (not in G, can't serialise functions)
+  window._merchantExecute = deal.execute;
+  window._merchantCanAfford = deal.canAfford;
+
+  document.getElementById('merchant-title').textContent = dealType.title;
+  document.getElementById('merchant-offer').textContent = deal.offerText;
+  const dealBtn = document.getElementById('merchant-deal-btn');
+  dealBtn.textContent = deal.btnText;
+  dealBtn.disabled = !deal.canAfford();
+
+  document.getElementById('merchant-banner').classList.remove('hidden');
+  saveGame();
+  scheduleNextMerchant();
+}
+
+function acceptMerchantDeal() {
+  if (!window._merchantExecute) return;
+  if (window._merchantCanAfford && !window._merchantCanAfford()) {
+    notify('🪙 Not enough coins for this deal!', 'error');
+    return;
+  }
+  G._merchantDealsAccepted = (G._merchantDealsAccepted || 0) + 1;
+  window._merchantExecute();
+  window._merchantExecute = null;
+  window._merchantCanAfford = null;
+  G.merchantActive = false;
+  G.merchantDeal = null;
+  checkAchievements();
+  saveGame();
+  renderAll();
+  document.getElementById('merchant-banner').classList.add('hidden');
+}
+
+function dismissMerchant() {
+  G.merchantActive = false;
+  G.merchantDeal = null;
+  window._merchantExecute = null;
+  window._merchantCanAfford = null;
+  document.getElementById('merchant-banner').classList.add('hidden');
+  saveGame();
+}
+
+// Restore merchant UI after a page reload
+function restoreMerchantIfActive() {
+  if (!G.merchantActive || !G.merchantDeal || Date.now() >= G.merchantExpiry) {
+    G.merchantActive = false;
+    return;
+  }
+  // Rebuild the deal object from saved data (execute fn is gone — re-create a basic one)
+  // We don't reconstruct execute; instead just show the banner so user can pass
+  document.getElementById('merchant-title').textContent = '🧙 Wandering Merchant';
+  document.getElementById('merchant-offer').textContent = G.merchantDeal.offerText || 'Special offer available!';
+  const dealBtn = document.getElementById('merchant-deal-btn');
+  dealBtn.textContent = G.merchantDeal.btnText || 'Deal';
+  dealBtn.disabled = true; // can't re-execute after reload without fn — just let it expire
+  document.getElementById('merchant-banner').classList.remove('hidden');
+}
+
+// ============================================================
+// ACHIEVEMENT DEFINITIONS
+// To add new achievements: add an entry to ACHIEVEMENTS array.
+// Each achievement needs: id, icon, name, desc, category, check(G)
+// category: 'crops' | 'farm' | 'events'
+// check(G) returns { earned: bool, progress: 0-1, progressLabel: string }
+// ============================================================
+
+// Per-crop milestone thresholds
+const CROP_MILESTONES = [
+  { key: 'first',    count: 1,   icon: '🌱', label: 'First Harvest',  suffix: '' },
+  { key: 'seasoned', count: 10,  icon: '🌿', label: 'Seasoned',        suffix: '' },
+  { key: 'veteran',  count: 50,  icon: '🥇', label: 'Veteran',          suffix: '' },
+  { key: 'master',   count: 200, icon: '👑', label: 'Master Grower',    suffix: '' },
+];
+
+// Build per-crop achievements dynamically from CROPS + CROP_MILESTONES
+function buildCropAchievements() {
+  const out = [];
+  CROPS.forEach(crop => {
+    CROP_MILESTONES.forEach(m => {
+      out.push({
+        id: 'crop_' + crop.id + '_' + m.key,
+        icon: m.icon,
+        name: crop.name + ': ' + m.label,
+        desc: 'Harvest ' + crop.name + ' ' + m.count + ' time' + (m.count > 1 ? 's' : ''),
+        category: 'crops',
+        cropId: crop.id,
+        milestone: m,
+        check: (G) => {
+          const n = G.cropHarvests[crop.id] || 0;
+          return {
+            earned: n >= m.count,
+            progress: Math.min(n / m.count, 1),
+            progressLabel: n + ' / ' + m.count,
+          };
+        },
+      });
+    });
+  });
+  return out;
+}
+
+// General / farm / event achievements
+const FARM_ACHIEVEMENTS = [
+  // ── Harvest milestones ─────────────────────────────────
+  { id:'total_10',   icon:'🌾', name:'Budding Farmer',    category:'farm',
+    desc:'Harvest 10 crops total',
+    check: G => ({ earned: G.totalHarvestCount>=10,  progress: Math.min(G.totalHarvestCount/10,1),  progressLabel: G.totalHarvestCount+'/10' }) },
+  { id:'total_50',   icon:'🌾', name:'Productive Plot',   category:'farm',
+    desc:'Harvest 50 crops total',
+    check: G => ({ earned: G.totalHarvestCount>=50,  progress: Math.min(G.totalHarvestCount/50,1),  progressLabel: G.totalHarvestCount+'/50' }) },
+  { id:'total_100',  icon:'🌾', name:'Hundred Harvests',  category:'farm',
+    desc:'Harvest 100 crops total',
+    check: G => ({ earned: G.totalHarvestCount>=100, progress: Math.min(G.totalHarvestCount/100,1), progressLabel: G.totalHarvestCount+'/100' }) },
+  { id:'total_500',  icon:'🌾', name:'Harvest Legend',    category:'farm',
+    desc:'Harvest 500 crops total',
+    check: G => ({ earned: G.totalHarvestCount>=500, progress: Math.min(G.totalHarvestCount/500,1), progressLabel: G.totalHarvestCount+'/500' }) },
+  { id:'total_1000', icon:'🌾', name:'Legendary Farmer',  category:'farm',
+    desc:'Harvest 1,000 crops total',
+    check: G => ({ earned: G.totalHarvestCount>=1000,progress: Math.min(G.totalHarvestCount/1000,1),progressLabel: G.totalHarvestCount+'/1,000' }) },
+  // ── Coins earned milestones ────────────────────────────
+  { id:'coins_100',   icon:'🪙', name:'First Purse',      category:'farm',
+    desc:'Earn 100 coins from harvests',
+    check: G => ({ earned: G.totalCoinsEarned>=100,   progress: Math.min(G.totalCoinsEarned/100,1),   progressLabel: G.totalCoinsEarned+'/100' }) },
+  { id:'coins_500',   icon:'🪙', name:'Coin Collector',   category:'farm',
+    desc:'Earn 500 coins from harvests',
+    check: G => ({ earned: G.totalCoinsEarned>=500,   progress: Math.min(G.totalCoinsEarned/500,1),   progressLabel: G.totalCoinsEarned+'/500' }) },
+  { id:'coins_2000',  icon:'🪙', name:'Prosperous Farm',  category:'farm',
+    desc:'Earn 2,000 coins from harvests',
+    check: G => ({ earned: G.totalCoinsEarned>=2000,  progress: Math.min(G.totalCoinsEarned/2000,1),  progressLabel: G.totalCoinsEarned+'/2,000' }) },
+  { id:'coins_10000', icon:'🪙', name:'Coin Hoarder',     category:'farm',
+    desc:'Earn 10,000 coins from harvests',
+    check: G => ({ earned: G.totalCoinsEarned>=10000, progress: Math.min(G.totalCoinsEarned/10000,1), progressLabel: G.totalCoinsEarned+'/10,000' }) },
+  { id:'coins_50000', icon:'🪙', name:'Golden Harvest',   category:'farm',
+    desc:'Earn 50,000 coins from harvests',
+    check: G => ({ earned: G.totalCoinsEarned>=50000, progress: Math.min(G.totalCoinsEarned/50000,1), progressLabel: G.totalCoinsEarned+'/50,000' }) },
+  // ── Plots milestones ───────────────────────────────────
+  { id:'plots_5',  icon:'🟫', name:'Room to Grow',      category:'farm',
+    desc:'Unlock 5 plots',
+    check: G => { const n=G.plots.filter(p=>p.unlocked).length; return { earned:n>=5,  progress:Math.min(n/5,1),  progressLabel:n+'/5' }; } },
+  { id:'plots_10', icon:'🟫', name:'Sprawling Farm',    category:'farm',
+    desc:'Unlock 10 plots',
+    check: G => { const n=G.plots.filter(p=>p.unlocked).length; return { earned:n>=10, progress:Math.min(n/10,1), progressLabel:n+'/10' }; } },
+  { id:'plots_20', icon:'🟫', name:'Full Estate',       category:'farm',
+    desc:'Unlock all 20 plots',
+    check: G => { const n=G.plots.filter(p=>p.unlocked).length; return { earned:n>=20, progress:Math.min(n/20,1), progressLabel:n+'/20' }; } },
+  // ── Level milestones ───────────────────────────────────
+  { id:'level_5',  icon:'🏅', name:'Cultivator',        category:'farm',
+    desc:'Reach Level 5',
+    check: G => ({ earned: G.level>=5  || G.prestige>0, progress: G.level>=5||G.prestige>0?1:G.level/5,   progressLabel:'Lv '+G.level }) },
+  { id:'level_10', icon:'🏅', name:'Master Farmer',     category:'farm',
+    desc:'Reach Level 10',
+    check: G => ({ earned: G.level>=10 || G.prestige>0, progress: G.level>=10||G.prestige>0?1:G.level/10, progressLabel:'Lv '+G.level }) },
+  // ── Diversity milestones ────────────────────────────────
+  { id:'diverse_5',  icon:'🌈', name:'Mixed Planting',   category:'farm',
+    desc:'Harvest 5 different crop types',
+    check: G => { const n=Object.keys(G.cropHarvests).length; return { earned:n>=5,  progress:Math.min(n/5,1),  progressLabel:n+'/5 types' }; } },
+  { id:'diverse_10', icon:'🌈', name:'Diverse Portfolio', category:'farm',
+    desc:'Harvest 10 different crop types',
+    check: G => { const n=Object.keys(G.cropHarvests).length; return { earned:n>=10, progress:Math.min(n/10,1), progressLabel:n+'/10 types' }; } },
+  { id:'diverse_20', icon:'🌈', name:'Complete Collection',category:'farm',
+    desc:'Harvest all 20 crop types at least once',
+    check: G => { const n=Object.keys(G.cropHarvests).length; return { earned:n>=20, progress:Math.min(n/20,1), progressLabel:n+'/20 types' }; } },
+  // ── Garlic specialist ──────────────────────────────────
+  { id:'garlic_10', icon:'🧄', name:'Garlic Lover',      category:'farm',
+    desc:'Harvest Garlic 10 times',
+    check: G => { const n=G.cropHarvests['garlic']||0; return { earned:n>=10, progress:Math.min(n/10,1), progressLabel:n+'/10' }; } },
+  // ── Prestige milestones ────────────────────────────────
+  { id:'prestige_1',  icon:'⭐', name:'Reborn',             category:'farm',
+    desc:'Reach Prestige 1',
+    check: G => ({ earned: G.prestige>=1,  progress: Math.min(G.prestige/1,1),  progressLabel:'Prestige '+G.prestige }) },
+  { id:'prestige_5',  icon:'⭐', name:'Veteran Grower',     category:'farm',
+    desc:'Reach Prestige 5',
+    check: G => ({ earned: G.prestige>=5,  progress: Math.min(G.prestige/5,1),  progressLabel:'Prestige '+G.prestige }) },
+  { id:'prestige_10', icon:'⭐', name:'Elite Farmer',       category:'farm',
+    desc:'Reach Prestige 10',
+    check: G => ({ earned: G.prestige>=10, progress: Math.min(G.prestige/10,1), progressLabel:'Prestige '+G.prestige }) },
+  { id:'prestige_25', icon:'⭐', name:'Legendary Elder',    category:'farm',
+    desc:'Reach Prestige 25',
+    check: G => ({ earned: G.prestige>=25, progress: Math.min(G.prestige/25,1), progressLabel:'Prestige '+G.prestige }) },
+  { id:'prestige_50', icon:'⭐', name:'Immortal Farmer',    category:'farm',
+    desc:'Reach Prestige 50 — the ultimate achievement',
+    check: G => ({ earned: G.prestige>=50, progress: Math.min(G.prestige/50,1), progressLabel:'Prestige '+G.prestige }) },
+  // ── Events achievements ────────────────────────────────
+  { id:'ev_first_event', icon:'📢', name:'Eventful Day',   category:'events',
+    desc:'Encounter your first random event',
+    check: G => ({ earned: (G._eventsEncountered||0)>=1,  progress:(G._eventsEncountered||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_events_10',   icon:'📢', name:'Old Hand',       category:'events',
+    desc:'Encounter 10 random events',
+    check: G => ({ earned: (G._eventsEncountered||0)>=10, progress:Math.min((G._eventsEncountered||0)/10,1), progressLabel:(G._eventsEncountered||0)+'/10' }) },
+  { id:'ev_merchant',    icon:'🧙', name:'Deal Maker',     category:'events',
+    desc:'Accept a deal from the Wandering Merchant',
+    check: G => ({ earned: (G._merchantDealsAccepted||0)>=1,  progress:(G._merchantDealsAccepted||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_merchant_5',  icon:'🧙', name:'Regular Customer',category:'events',
+    desc:'Accept 5 deals from the Wandering Merchant',
+    check: G => ({ earned: (G._merchantDealsAccepted||0)>=5,  progress:Math.min((G._merchantDealsAccepted||0)/5,1), progressLabel:(G._merchantDealsAccepted||0)+'/5' }) },
+  { id:'ev_fix_event',   icon:'🛡️', name:'Defender',  category:'events',
+    desc:'Fix a random event (pay to protect your farm)',
+    check: G => ({ earned: (G._eventsFixed||0)>=1,  progress:(G._eventsFixed||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_fix_10',      icon:'🛡️', name:'Guardian',  category:'events',
+    desc:'Fix 10 random events',
+    check: G => ({ earned: (G._eventsFixed||0)>=10, progress:Math.min((G._eventsFixed||0)/10,1), progressLabel:(G._eventsFixed||0)+'/10' }) },
+  { id:'ev_sun_bonus',   icon:'☀️', name:'Sun Blessed',  category:'events',
+    desc:'Benefit from a Bumper Sun Day event',
+    check: G => ({ earned: (G._sunBonusCount||0)>=1, progress:(G._sunBonusCount||0)>=1?1:0, progressLabel:'' }) },
+  { id:'ev_bee_boost',   icon:'🐝', name:'Bee Keeper',     category:'events',
+    desc:'Benefit from a Wild Bee Swarm event',
+    check: G => ({ earned: (G._beeBoostCount||0)>=1, progress:(G._beeBoostCount||0)>=1?1:0, progressLabel:'' }) },
+];
+
+// Build the combined list once at startup
+let ALL_ACHIEVEMENTS = [];
+function buildAllAchievements() {
+  ALL_ACHIEVEMENTS = [...buildCropAchievements(), ...FARM_ACHIEVEMENTS];
+}
+
+// ── Achievement engine ─────────────────────────────────────
+let _pendingNewAchievements = []; // ids newly earned, waiting for journal dot
+
+function checkAchievements() {
+  let anyNew = false;
+  ALL_ACHIEVEMENTS.forEach(ach => {
+    if (G.achievementsEarned.includes(ach.id)) return;
+    const result = ach.check(G);
+    if (result.earned) {
+      G.achievementsEarned.push(ach.id);
+      _pendingNewAchievements.push(ach.id);
+      anyNew = true;
+      // Toast — brief delay so it doesn't clash with harvest toast
+      setTimeout(() => {
+        notify('🏅 Achievement: ' + ach.name + '!', 'unlock');
+      }, 600);
+    }
+  });
+  if (anyNew) {
+    saveGame();
+    // Show red dot on journal button
+    const dot = document.getElementById('journal-new-badge');
+    if (dot) dot.style.display = 'inline-block';
+  }
+}
+
+// ── Journal UI ─────────────────────────────────────────────
+let _currentJTab = 'crops';
+
+function openJournal() {
+  // Clear the new-badge dot
+  _pendingNewAchievements = [];
+  const dot = document.getElementById('journal-new-badge');
+  if (dot) dot.style.display = 'none';
+  renderJournal();
+  document.getElementById('journal-overlay').classList.remove('hidden');
+}
+
+function closeJournal() {
+  document.getElementById('journal-overlay').classList.add('hidden');
+}
+
+function showJTab(tab) {
+  _currentJTab = tab;
+  document.querySelectorAll('.jtab').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tab)));
+  document.querySelectorAll('.jtab-panel').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('jtab-' + tab);
+  if (el) el.classList.add('active');
+  renderJournal();
+}
+
+function renderJournal() {
+  const earned = new Set(G.achievementsEarned);
+  const total  = ALL_ACHIEVEMENTS.length;
+  const done   = earned.size;
+
+  document.getElementById('journal-summary').textContent =
+    done + ' / ' + total + ' achievements earned';
+
+  if (_currentJTab === 'crops') renderCropsTab(earned);
+  else if (_currentJTab === 'farm') renderFarmTab(earned);
+  else if (_currentJTab === 'events') renderEventsTab(earned);
+}
+
+function renderCropsTab(earned) {
+  const panel = document.getElementById('jtab-crops');
+  if (!panel) return;
+
+  // One row per crop showing harvest count + milestone badges
+  let html = '<div style="margin-bottom:10px">';
+  CROPS.forEach(crop => {
+    const count = G.cropHarvests[crop.id] || 0;
+    const theme = CROP_THEME[crop.id] || { bg:'#1A1A1A' };
+    const artSvg = '<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"'
+      + ' style="background:' + theme.bg + ';border-radius:7px">' + cropArt(crop.id) + '</svg>';
+
+    // Badge state for each milestone
+    const badges = CROP_MILESTONES.map(m => {
+      const achId = 'crop_' + crop.id + '_' + m.key;
+      const isEarned = earned.has(achId);
+      let cls = 'crop-badge';
+      if (m.key === 'master' && isEarned) cls += ' platinum';
+      else if (m.key === 'veteran' && isEarned) cls += ' gold';
+      else if (isEarned) cls += ' earned';
+      const tip = m.label + ' (' + m.count + '×)';
+      return '<div class="' + cls + '" title="' + tip + '">' + (isEarned ? m.icon : '·') + '</div>';
+    }).join('');
+
+    const unlocked = crop.unlockLevel <= G.level || G.prestige > 0 || count > 0;
+    const dimStyle = unlocked ? '' : 'opacity:0.35';
+    html += '<div class="crop-journal-row" style="' + dimStyle + '">';
+    html += '<div class="crop-journal-art">' + artSvg + '</div>';
+    html += '<div class="crop-journal-info">';
+    html += '<div class="crop-journal-name">' + crop.name + '</div>';
+    html += '<div class="crop-journal-count">' + (count > 0 ? count + ' harvested' : unlocked ? 'Not yet harvested' : 'Locked — Lv' + crop.unlockLevel) + '</div>';
+    html += '</div>';
+    html += '<div class="crop-journal-badges">' + badges + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+function renderAchSection(title, achs, earned) {
+  let html = '<div class="ach-section-title">' + title + '</div><div class="ach-grid">';
+  achs.forEach(ach => {
+    const result = ach.check(G);
+    const isNew = _pendingNewAchievements.includes(ach.id);
+    let cls = 'ach-card';
+    if (result.earned && isNew) cls += ' earned-new';
+    else if (result.earned) cls += ' earned';
+    else if (result.progress === 0) cls += ' locked';
+
+    const pct = Math.round(result.progress * 100);
+    html += '<div class="' + cls + '">';
+    if (result.earned) html += '<span class="ach-earned-tick">✓</span>';
+    html += '<div class="ach-icon">' + ach.icon + '</div>';
+    html += '<div class="ach-name">' + ach.name + '</div>';
+    html += '<div class="ach-desc">' + ach.desc + '</div>';
+    if (!result.earned && result.progress > 0) {
+      html += '<div class="ach-progress">' + result.progressLabel + '</div>';
+      html += '<div class="ach-progress-bar"><div class="ach-progress-fill" style="width:' + pct + '%"></div></div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderFarmTab(earned) {
+  const panel = document.getElementById('jtab-farm');
+  if (!panel) return;
+  const farmAchs = ALL_ACHIEVEMENTS.filter(a => a.category === 'farm');
+  const sections = [
+    { title: 'Harvests', ids: ['total_10','total_50','total_100','total_500','total_1000'] },
+    { title: 'Coins Earned', ids: ['coins_100','coins_500','coins_2000','coins_10000','coins_50000'] },
+    { title: 'Plots', ids: ['plots_5','plots_10','plots_20'] },
+    { title: 'Levels', ids: ['level_5','level_10'] },
+    { title: 'Diversity', ids: ['diverse_5','diverse_10','diverse_20'] },
+    { title: 'Specialist', ids: ['garlic_10'] },
+    { title: 'Prestige', ids: ['prestige_1','prestige_5','prestige_10','prestige_25','prestige_50'] },
+  ];
+  let html = '';
+  sections.forEach(sec => {
+    const achs = sec.ids.map(id => farmAchs.find(a => a.id === id)).filter(Boolean);
+    html += renderAchSection(sec.title, achs, earned);
+  });
+  panel.innerHTML = html;
+}
+
+function renderEventsTab(earned) {
+  const panel = document.getElementById('jtab-events');
+  if (!panel) return;
+  const evAchs = ALL_ACHIEVEMENTS.filter(a => a.category === 'events');
+  const sections = [
+    { title: 'Random Events', ids: ['ev_first_event','ev_events_10','ev_fix_event','ev_fix_10'] },
+    { title: 'Wandering Merchant', ids: ['ev_merchant','ev_merchant_5'] },
+    { title: 'Weather Blessings', ids: ['ev_sun_bonus','ev_bee_boost'] },
+  ];
+  let html = '';
+  sections.forEach(sec => {
+    const achs = sec.ids.map(id => evAchs.find(a => a.id === id)).filter(Boolean);
+    html += renderAchSection(sec.title, achs, earned);
+  });
+  panel.innerHTML = html;
+}
+
+// ============================================================
+// BSV WALLET INTEGRATION (stub)
+// ============================================================
+function connectWallet() {
+  if (window.platformSDK) {
+    // Real Metanet connection
+    window.platformSDK.sendCommand({ type: 'connection', navbg: '#111D0F' });
+    window.platformSDK.onCommand((data) => {
+      if (data.type === 'connection-response') {
+        if (data.payload && !data.payload.anonymous && data.payload.wallet) {
+          G.walletConnected = true;
+          G.walletAddress = data.payload.wallet.address;
+          saveGame();
+          renderStats();
+          notify('✅ Wallet connected!', 'unlock');
+        } else {
+          notify('👤 Running anonymously — coins only mode.', 'error');
+          setPlayerState('anonymous');
+        }
+      }
+    });
+  } else {
+    // Local dev mode — stub
+    console.log('Dev mode: BSV wallet not available. Running in coins-only mode.');
+    notify('🔧 Dev mode: BSV not available. Use coins!', 'error');
+    setPlayerState('anonymous');
+  }
+}
+
+function setPlayerState(state) {
+  if (state === 'anonymous') {
+    G.walletConnected = false;
+    G.walletAddress = null;
+    document.getElementById('bsv-pill').style.opacity = '0.5';
+  }
+}
+
+/**
+ * Pay with BSV — stub for dev mode.
+ * When on Metanet.page, this sends a real pay command.
+ * @param {number} satoshis  — coinPrice * 1000
+ * @param {string} ref       — unique reference
+ * @param {Function} onSuccess — called with payload on success
+ * @param {Function} onFail    — called with error message on fail
+ */
+function payWithBSV(satoshis, ref, onSuccess, onFail) {
+  if (window.platformSDK && G.walletConnected) {
+    // Real payment via Metanet
+    const GAME_BSV_ADDRESS = 'YOUR_GAME_BSV_ADDRESS_HERE'; // TODO: replace with real address
+    window.platformSDK.sendCommand({
+      type: 'pay',
+      ref: ref,
+      recipients: [{ address: GAME_BSV_ADDRESS, value: satoshis, note: 'Plot Twist purchase' }],
+    });
+    window.platformSDK.onCommand((data) => {
+      if (data.type === 'pay-response' && data.payload.ref === ref) {
+        if (data.payload.success) {
+          onSuccess(data.payload);
+        } else {
+          onFail(data.payload.message || 'Payment failed');
+        }
+      }
+    });
+  } else {
+    // Dev mode stub — always fails gracefully
+    console.log(`Dev mode: BSV payment stubbed (${satoshis} sats, ref: ${ref}). Use coins instead.`);
+    onFail('Wallet not available in dev mode. Use coins instead.');
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  loadGame();
+
+  // Try to connect wallet if platform SDK present
+  if (window.platformSDK) {
+    connectWallet();
+  }
+
+  buildAllAchievements();
+  checkAchievements(); // evaluate on load (for returning players)
+  renderAll();
+
+  // Schedule first event and merchant
+  scheduleNextEvent();
+  scheduleNextMerchant();
+  restoreMerchantIfActive();
+
+  // Close journal on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeJournal();
+      document.getElementById('event-overlay').classList.add('hidden');
+    }
+  });
+
+  // Tick every second
+  setInterval(tick, 1000);
+
+  // Also re-render shop when coins change (handled in renderAll already)
+}
+
+// Run
+init();
+</script>
+</body>
+</html>
