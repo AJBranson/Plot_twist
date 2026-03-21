@@ -46,6 +46,21 @@ body {
   overflow-x: hidden;
 }
 
+/* Metanet.page nav bar overlaps the top 70px of the iframe.
+   This background strip blends the game header into that nav area. */
+body::before {
+  content: '';
+  display: block;
+  height: 70px;
+  background: linear-gradient(180deg, #0C1A08 0%, #0C1A08 100%);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99; /* below header (100) */
+  pointer-events: none;
+}
+
 button { cursor: pointer; font-family: var(--ff-body); border: none; outline: none; }
 button:active { transform: scale(0.95); }
 
@@ -56,6 +71,7 @@ button:active { transform: scale(0.95); }
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  padding-top: 70px; /* Account for Metanet.page nav bar overlay */
 }
 
 /* ============================================================
@@ -65,14 +81,20 @@ button:active { transform: scale(0.95); }
   background: linear-gradient(180deg, #0C1A08 0%, #182B14 100%);
   border-bottom: 1px solid var(--border);
   padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
   position: sticky;
   top: 0;
   z-index: 100;
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* Center header content without clipping the background */
+.header-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .game-title {
@@ -184,6 +206,12 @@ button:active { transform: scale(0.95); }
   gap: 0;
   flex: 1;
   min-height: 0;
+  /* Center the gameplay area; prevents it stretching on wide screens */
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 
 /* ============================================================
@@ -200,7 +228,6 @@ button:active { transform: scale(0.95); }
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-  max-width: 520px;
   flex-wrap: wrap;
 }
 .farm-name-wrap, .farmer-name-wrap {
@@ -259,7 +286,6 @@ button:active { transform: scale(0.95); }
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  max-width: 520px;
 }
 
 /* ============================================================
@@ -448,9 +474,10 @@ button:active { transform: scale(0.95); }
   overflow-y: auto;
   flex: 1;
   padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  align-content: start;
 }
 
 /* Scrollbar styling */
@@ -467,19 +494,22 @@ button:active { transform: scale(0.95); }
   padding: 4px 2px 2px;
   border-top: 1px solid var(--border);
   margin-top: 4px;
+  /* Span both columns */
+  grid-column: 1 / -1;
 }
 
 .crop-card {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 5px;
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 7px 9px;
+  padding: 7px 7px 6px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   position: relative;
+  /* Remove the old flex-row assumptions */
 }
 
 .crop-card:hover { background: rgba(111,207,58,0.08); border-color: rgba(111,207,58,0.3); }
@@ -502,9 +532,9 @@ button:active { transform: scale(0.95); }
 
 .crop-card-icon {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
   overflow: hidden;
 }
 
@@ -514,7 +544,7 @@ button:active { transform: scale(0.95); }
 }
 
 .crop-card-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--text);
   white-space: nowrap;
@@ -524,10 +554,11 @@ button:active { transform: scale(0.95); }
 
 .crop-card-stats {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-dim);
+  flex-wrap: wrap;
 }
 
 .crop-stat-coin { color: var(--gold); font-weight: 700; }
@@ -605,12 +636,12 @@ button:active { transform: scale(0.95); }
    MOBILE
    ============================================================ */
 @media (max-width: 768px) {
-  #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; border-left: none; border-right: none; }
   #shop-sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 260px; }
   #shop-crops-list { flex-direction: row; flex-wrap: wrap; }
   .shop-level-divider { width: 100%; }
   .crop-card { width: calc(50% - 6px); flex-shrink: 0; }
-  #plots-grid { grid-template-columns: repeat(3, 1fr); max-width: 100%; }
+  #plots-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 480px) {
@@ -624,7 +655,6 @@ button:active { transform: scale(0.95); }
    ============================================================ */
 #storage-area {
   margin-top: 18px;
-  max-width: 520px;
 }
 
 #storage-heading {
@@ -783,6 +813,8 @@ button:active { transform: scale(0.95); }
   border-color: rgba(111,207,58,0.4);
   flex-direction: column;
   align-items: stretch;
+  /* Span both columns when the qty picker is open */
+  grid-column: 1 / -1;
 }
 
 .crop-card.expanded .crop-card-main {
@@ -806,6 +838,7 @@ button:active { transform: scale(0.95); }
   font-size: 11px;
   color: var(--green-hi);
   font-weight: 700;
+  /* Span full width — sits above the 2-col grid in its own element */
 }
 
 .selected-indicator button {
@@ -1354,6 +1387,7 @@ button:active { transform: scale(0.95); }
 
   <!-- HEADER -->
   <header id="header">
+    <div class="header-inner">
     <span class="game-title">🌾 Plot Twist</span>
     <div class="header-stats">
       <div class="stat-pill coins">
@@ -1382,6 +1416,7 @@ button:active { transform: scale(0.95); }
     <div class="bsv-pill" id="bsv-pill">
       <span id="bsv-status">Wallet: Local Mode</span>
       <button onclick="connectWallet()">Connect</button>
+    </div>
     </div>
   </header>
 
@@ -2465,11 +2500,11 @@ function renderShop() {
       if (expanded) classes += ' expanded';
       if (!unlocked) classes += ' locked-crop';
 
-      const artSvg = `<svg width="40" height="40" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:7px">${cropArt(crop.id)}</svg>`;
+      const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px">${cropArt(crop.id)}</svg>`;
 
       // Stock badge (seeds in storage)
       const stockBadge = inStock > 0
-        ? `<span style="font-size:9px;background:rgba(111,207,58,0.2);color:var(--green-hi);border-radius:6px;padding:1px 5px;margin-left:4px;font-weight:800">×${inStock}</span>`
+        ? `<span style="font-size:9px;background:rgba(111,207,58,0.2);color:var(--green-hi);border-radius:6px;padding:1px 4px;margin-left:3px;font-weight:800">×${inStock}</span>`
         : '';
 
       // Lock / level badge
@@ -2477,13 +2512,16 @@ function renderShop() {
         ? `<span class="crop-lock-badge">Lv${crop.unlockLevel}</span>`
         : '';
 
-      const mainRow = `<div class="crop-card-main">
+      // Compact card: icon + name/stats as a flex row (works well at ~120px width)
+      const mainRow = `<div class="crop-card-main" style="display:flex;align-items:center;gap:7px">
         <div class="crop-card-icon">${artSvg}</div>
         <div class="crop-card-info">
           <div class="crop-card-name">${crop.name}${stockBadge}</div>
           <div class="crop-card-stats">
             <span class="crop-stat-coin">🪙${crop.seedCost}</span>
             <span class="crop-stat-sell">→${crop.sellPrice}</span>
+          </div>
+          <div class="crop-card-stats" style="margin-top:1px">
             <span class="crop-stat-time">${formatTime(crop.gameSecs)}</span>
           </div>
         </div>
