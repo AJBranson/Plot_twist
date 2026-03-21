@@ -441,6 +441,80 @@ button:active { transform: scale(0.95); }
 .shake { animation: shake 0.4s ease; }
 
 /* ============================================================
+   WATERING CAN
+   ============================================================ */
+#watering-can-area {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#watering-can-btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+}
+#watering-can-btn:hover { transform: translateY(-2px) rotate(-8deg); }
+#watering-can-btn:active { transform: scale(0.92) rotate(-12deg); }
+#watering-can-btn:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+
+#watering-can-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#watering-can-label {
+  font-family: var(--ff-head);
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+#watering-can-status {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+#watering-can-bar-outer {
+  width: 100%;
+  height: 7px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+#watering-can-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #4FC3F7, #81D4FA);
+  transition: width 1s linear, background 0.4s;
+}
+
+#watering-can-bar-fill.full {
+  background: linear-gradient(90deg, #29B6F6, #00E5FF);
+  box-shadow: 0 0 8px rgba(41,182,246,0.6);
+}
+
+@keyframes can-splash {
+  0%   { transform: translateY(-2px) rotate(-12deg); }
+  30%  { transform: translateY(2px)  rotate(-18deg); }
+  60%  { transform: translateY(-1px) rotate(-10deg); }
+  100% { transform: translateY(0)    rotate(0deg); }
+}
+.can-splashing { animation: can-splash 0.5s ease forwards; }
+
+/* ============================================================
    SHOP SIDEBAR
    ============================================================ */
 #shop-sidebar {
@@ -1487,6 +1561,21 @@ button:active { transform: scale(0.95); }
         </div>
         <div id="storage-grid"></div>
       </div>
+
+      <!-- WATERING CAN -->
+      <div id="watering-can-area">
+        <button id="watering-can-btn" onclick="useWateringCan()" title="Watering Can"></button>
+        <div id="watering-can-info">
+          <div id="watering-can-label">
+            🪣 Watering Can
+            <span style="font-size:10px;font-weight:700;color:var(--text-dim)">−10% grow time</span>
+          </div>
+          <div id="watering-can-status">Filling…</div>
+          <div id="watering-can-bar-outer">
+            <div id="watering-can-bar-fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- SHOP SIDEBAR -->
@@ -1951,6 +2040,8 @@ const DEFAULT_STATE = {
   merchantActive: false, // is merchant banner showing?
   merchantDeal: null,    // current deal object
   merchantExpiry: 0,     // ms timestamp when merchant leaves
+
+  wateringCanLastUsed: 0, // ms timestamp — 0 = never used (starts full)
 };
 
 let G = null; // game state
@@ -1987,6 +2078,7 @@ function saveGame() {
       lastEventTime: G.lastEventTime,
       merchantExpiry: G.merchantExpiry,
       merchantDeal: G.merchantDeal,
+      wateringCanLastUsed: G.wateringCanLastUsed,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
   } catch(e) { console.warn('Save failed:', e); }
@@ -2014,6 +2106,7 @@ function loadGame() {
       G.merchantExpiry = saved.merchantExpiry ?? 0;
       G.merchantDeal   = saved.merchantDeal   ?? null;
       G.merchantActive = (saved.merchantDeal && saved.merchantExpiry > Date.now());
+      G.wateringCanLastUsed = saved.wateringCanLastUsed ?? 0;
       G.walletAddress = saved.walletAddress ?? null;
       if (saved.plots) {
         saved.plots.forEach((sp, i) => {
@@ -2337,6 +2430,112 @@ function checkLevelUp() {
 }
 
 // ============================================================
+// WATERING CAN
+// ============================================================
+const WATERING_CAN_CHARGE_SECS = 120; // 2 minutes to fully charge
+
+function wateringCanCharge() {
+  if (G.wateringCanLastUsed === 0) return 1; // never used = starts full
+  const elapsed = (Date.now() - G.wateringCanLastUsed) / 1000;
+  return Math.min(elapsed / WATERING_CAN_CHARGE_SECS, 1);
+}
+
+function useWateringCan() {
+  const charge = wateringCanCharge();
+  if (charge < 1) {
+    const secsLeft = Math.ceil(WATERING_CAN_CHARGE_SECS * (1 - charge));
+    notify('💧 Watering can still filling! Ready in ' + formatTime(secsLeft), 'error');
+    return;
+  }
+  const growing = G.plots.filter(p => p.cropId && p.plantedAt && !p.ready);
+  if (growing.length === 0) {
+    notify('🌵 No growing crops to water!', 'error');
+    return;
+  }
+  growing.forEach(p => {
+    const crop = CROP_MAP[p.cropId];
+    const elapsed = Date.now() - p.plantedAt;
+    const remaining = Math.max(0, crop.gameSecs * 1000 - elapsed);
+    p.plantedAt -= Math.floor(remaining * 0.10);
+  });
+  G.wateringCanLastUsed = Date.now();
+  saveGame();
+  renderPlots();
+  renderWateringCan();
+  // Splash animation
+  const btn = document.getElementById('watering-can-btn');
+  if (btn) {
+    btn.classList.add('can-splashing');
+    setTimeout(() => btn.classList.remove('can-splashing'), 500);
+  }
+  notify('💧 Watered ' + growing.length + ' crop' + (growing.length !== 1 ? 's' : '') + '! −10% grow time each.', 'harvest');
+}
+
+function wateringCanSVG(charge) {
+  // Fill level: the water inside the can reflects charge (0–1)
+  const waterColor = charge >= 1 ? '#29B6F6' : charge > 0.3 ? '#4FC3F7' : '#78909C';
+  const waterOpacity = 0.3 + charge * 0.5;
+  // Can body dims (within 56x56 viewport)
+  return `<svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <!-- Handle -->
+    <path d="M38 14 Q50 14 50 24 Q50 34 38 34" fill="none" stroke="#78909C" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- Spout -->
+    <path d="M10 26 Q4 26 3 21 L8 18 Q10 22 14 22" fill="#607D8B" stroke="#546E7A" stroke-width="1"/>
+    <!-- Water drops from spout (visible when full) -->
+    ${charge >= 1 ? `
+    <circle cx="1" cy="25" r="1.5" fill="#29B6F6" opacity="0.9"/>
+    <circle cx="0" cy="30" r="1.2" fill="#4FC3F7" opacity="0.7"/>
+    <circle cx="2" cy="34" r="1" fill="#4FC3F7" opacity="0.5"/>` : ''}
+    <!-- Can body -->
+    <rect x="11" y="18" width="27" height="24" rx="4" fill="#546E7A" stroke="#455A64" stroke-width="1.5"/>
+    <!-- Water fill inside body -->
+    <clipPath id="can-clip">
+      <rect x="12" y="19" width="25" height="22" rx="3"/>
+    </clipPath>
+    <rect x="12" y="${19 + 22 * (1 - charge)}" width="25" height="${22 * charge}" fill="${waterColor}" opacity="${waterOpacity}" clip-path="url(#can-clip)"/>
+    <!-- Shine -->
+    <rect x="14" y="20" width="5" height="10" rx="2.5" fill="white" opacity="0.12"/>
+    <!-- Rose / sprinkle head -->
+    <rect x="10" y="22" width="5" height="8" rx="2" fill="#78909C" stroke="#607D8B" stroke-width="1"/>
+    <circle cx="11" cy="24" r="0.8" fill="#B0BEC5"/>
+    <circle cx="13" cy="24" r="0.8" fill="#B0BEC5"/>
+    <circle cx="11" cy="27" r="0.8" fill="#B0BEC5"/>
+    <circle cx="13" cy="27" r="0.8" fill="#B0BEC5"/>
+    <!-- Lid -->
+    <rect x="11" y="17" width="27" height="4" rx="2" fill="#607D8B" stroke="#546E7A" stroke-width="1"/>
+  </svg>`;
+}
+
+function renderWateringCan() {
+  const btn = document.getElementById('watering-can-btn');
+  const fill = document.getElementById('watering-can-bar-fill');
+  const status = document.getElementById('watering-can-status');
+  if (!btn || !fill || !status) return;
+
+  const charge = wateringCanCharge();
+  const isFull = charge >= 1;
+  const hasGrowing = G.plots.some(p => p.cropId && p.plantedAt && !p.ready);
+
+  btn.innerHTML = wateringCanSVG(charge);
+  btn.disabled = !isFull || !hasGrowing;
+  btn.title = isFull
+    ? (hasGrowing ? 'Click to water crops (−10% grow time)' : 'No growing crops to water')
+    : 'Filling… click when full';
+
+  fill.style.width = (charge * 100).toFixed(1) + '%';
+  fill.classList.toggle('full', isFull);
+
+  if (isFull) {
+    status.textContent = hasGrowing ? '🚿 Ready! Click to water all crops' : '🪣 Full — plant something first';
+    status.style.color = hasGrowing ? 'var(--green-hi)' : 'var(--text-dim)';
+  } else {
+    const secsLeft = Math.ceil(WATERING_CAN_CHARGE_SECS * (1 - charge));
+    status.textContent = '💧 Filling… ' + formatTime(secsLeft) + ' remaining';
+    status.style.color = 'var(--text-dim)';
+  }
+}
+
+// ============================================================
 // TICK — runs every second
 // ============================================================
 function tick() {
@@ -2355,6 +2554,7 @@ function tick() {
   checkRandomEvent();
   checkMerchant();
   renderStats();
+  renderWateringCan();
   if (changed) {
     saveGame();
     renderPlots();
@@ -2374,6 +2574,7 @@ function renderAll() {
   renderPlots();
   renderStorage();
   renderShop();
+  renderWateringCan();
 }
 
 function renderStats() {
