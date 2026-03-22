@@ -2756,10 +2756,6 @@ function collectSeeds(idx) {
   const crop = CROP_MAP[plot.cropId];
   if (!plot.seedReady || !crop) return;
 
-  // Close the collection overlay
-  const overlay = document.getElementById('seed-collect-overlay-' + idx);
-  if (overlay) overlay.remove();
-
   // Roll yield: 45% = 1 seed, 45% = 2 seeds, 10% = 3 seeds
   const roll = Math.random();
   let qty = roll < 0.45 ? 1 : roll < 0.90 ? 2 : 3;
@@ -2788,7 +2784,8 @@ function collectSeeds(idx) {
   renderAll();
 
   const heritageMsg = isHeritage ? ' ✨ Heritage seed!' : '';
-  notify(`🌱 Collected ${qty} ${crop.name} seed${qty !== 1 ? 's' : ''}!${heritageMsg}`, 'levelup');
+  const bumperMsg = qty === 3 ? ' Bumper crop!' : '';
+  notify(`🌱 Collected ${qty}× ${crop.name} seed${qty !== 1 ? 's' : ''}!${bumperMsg}${heritageMsg}`, 'levelup');
 }
 
 // Called from tick() — advances seed phase, marks ready when done
@@ -3340,7 +3337,7 @@ function renderPlotsOnly() {
   G.plots.forEach((plot, idx) => {
     const tile = grid.querySelector(`[data-idx="${idx}"]`);
     if (!tile) return;
-    if (plot.cropId && !plot.ready && plot.plantedAt) {
+    if (plot.cropId && !plot.ready && plot.plantedAt && !plot.seeding) {
       const crop = CROP_MAP[plot.cropId];
       const elapsed = now - plot.plantedAt;
       const progress = Math.min(elapsed / (crop.gameSecs * 1000), 1);
@@ -3475,7 +3472,7 @@ function renderPlots() {
       const ringColour = plot.seedReady ? '#FFD700' : atRisk ? '#FF8C00' : '#A78BFA';
 
       if (plot.seedReady) {
-        return `<div class="plot-tile seeding seed-ready" data-idx="${idx}" onclick="showSeedCollectOverlay(${idx})">
+        return `<div class="plot-tile seeding seed-ready" data-idx="${idx}" onclick="collectSeeds(${idx})">
           <div class="plot-visual" style="box-shadow:0 0 12px rgba(255,215,0,0.3)">
             <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
             <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
@@ -3744,9 +3741,9 @@ function renderShop() {
           </div>
           <div class="crop-card-stats" style="margin-top:1px">
             <span class="crop-stat-time">${formatTime(crop.gameSecs)}</span>
+            <span style="font-size:9px;color:#FFD700;opacity:0.8">✨ Exotic</span>
           </div>
         </div>
-        <span style="font-size:9px;color:#FFD700;opacity:0.8;white-space:nowrap">✨ Exotic</span>
       </div>`;
 
       let qtyPicker = '';
@@ -3768,7 +3765,7 @@ function renderShop() {
       <div class="shop-level-divider" style="background:linear-gradient(90deg,rgba(255,215,0,0.12),rgba(255,215,0,0.04));border-color:rgba(255,215,0,0.3);color:#FFD700">
         ✨ Exotic Seeds
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px">${exoticCards}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;grid-column:1 / -1">${exoticCards}</div>
     `;
   }
 
