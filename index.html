@@ -2740,9 +2740,10 @@ function startSeedSaving(idx) {
   plot.seedingDuration = Math.round(crop.gameSecs * SEED_PHASE_RATIO * 1000);
   plot.seedReady = false;
 
-  // Close the harvest-fork overlay if open
+  // Close the harvest-fork overlay — must use .remove() because the overlay
+  // was created with display:flex as an inline style; classList cannot override it.
   const overlay = document.getElementById('harvest-fork-overlay');
-  if (overlay) overlay.classList.add('hidden');
+  if (overlay) overlay.remove();
 
   saveGame();
   renderPlots();
@@ -2857,6 +2858,9 @@ function showHarvestFork(idx) {
   const crop = CROP_MAP[plot.cropId];
   if (!crop) return;
 
+  // Guard: if already seeding (e.g. player taps rapidly), do nothing
+  if (plot.seeding || !plot.ready) return;
+
   // Remove any existing fork overlay
   const existing = document.getElementById('harvest-fork-overlay');
   if (existing) existing.remove();
@@ -2883,7 +2887,7 @@ function showHarvestFork(idx) {
           <div style="font-weight:800;color:var(--green-hi);font-size:13px">🌾 Harvest Now</div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Earn 🪙${displayPrice} immediately. Seed consumed.</div>
         </button>
-        <button onclick="startSeedSaving(${idx})"
+        <button onclick="startSeedSaving(${idx});const _o=document.getElementById('harvest-fork-overlay');if(_o)_o.remove();"
           style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.4);border-radius:10px;padding:12px;cursor:pointer;text-align:left">
           <div style="font-weight:800;color:#FFD700;font-size:13px">🌱 Let Go to Seed</div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Wait ~${seedTime} more. Gamble for 1–3 new seeds. No coin harvest.</div>
@@ -2935,7 +2939,12 @@ function showSeedCollectOverlay(idx) {
 
 function harvestCrop(idx) {
   const plot = G.plots[idx];
-  if (!plot.ready) return;
+  if (!plot.ready) {
+    // Close any stale overlay that might still be showing
+    const stale = document.getElementById('harvest-fork-overlay');
+    if (stale) stale.remove();
+    return;
+  }
   const crop = CROP_MAP[plot.cropId];
 
   const baseSell = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised ? 1.25 : 1) * (plot.heritage ? 1.20 : 1));
@@ -4926,7 +4935,7 @@ function payWithBSV(satoshis, ref, onSuccess, onFail) {
 // SQL in farming_game_design_v5.docx Section 18 to set up the
 // two tables (lb_users, lb_scores).
 const LB_CONFIG = {
-  url:     'https://hhisdlawemzihzbxmwkc.supabase.co',   
+  url:     'https://hhisdlawemzihzbxmwkc.supabase.co',
   anonKey: 'sb_publishable__lesBNacxfH92P_zn9Fo9A_XIDtn_3e',
   gameId:  'plot-twist',
 };
