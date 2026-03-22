@@ -623,6 +623,30 @@ button:active { transform: scale(0.95); }
   50%       { box-shadow: 0 0 22px rgba(139,195,74,0.7); }
 }
 
+
+/* ============================================================
+   VEGE STAND MARKETPLACE
+   ============================================================ */
+#vege-stand-area {
+  margin-top: 14px;
+}
+
+#vege-stand-btn:hover { transform: translateY(-2px) scale(1.05); }
+#vege-stand-btn:active { transform: scale(0.93); }
+
+.stand-listing-row { transition: background 0.12s; }
+.stand-listing-row:hover { background: rgba(255,255,255,0.05) !important; }
+
+#list-seeds-btn:hover:not(:disabled) { background: rgba(255,209,64,0.25) !important; }
+
+.market-listing-row { transition: background 0.12s, border-color 0.12s; }
+.market-listing-row:hover { background: rgba(30,55,20,0.8) !important; }
+
+.market-filter-btn { transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.market-filter-btn:hover { opacity: 0.85; }
+
+#buy-confirm-overlay { animation: fade-in 0.2s ease; }
+
 /* ============================================================
    SHOP SIDEBAR
    ============================================================ */
@@ -1743,6 +1767,9 @@ button:active { transform: scale(0.95); }
           <div class="compost-pips" id="compost-pips"></div>
         </div>
       </div>
+      <!-- VEGE STAND -->
+      <div id="vege-stand-area" style="display:none"></div>
+
     </section>
 
     <!-- SHOP SIDEBAR -->
@@ -1807,6 +1834,7 @@ button:active { transform: scale(0.95); }
         <button class="jtab" onclick="showJTab('farm')">Farm</button>
         <button class="jtab" onclick="showJTab('events')">Events</button>
         <button class="jtab" onclick="showJTab('leaderboard')">🏆</button>
+        <button class="jtab" id="market-tab-btn" onclick="showJTab('market')" style="display:none">🥕</button>
       </div>
       <button class="journal-close-btn" onclick="closeJournal()">✕</button>
     </div>
@@ -1815,6 +1843,7 @@ button:active { transform: scale(0.95); }
       <div id="jtab-farm"  class="jtab-panel"></div>
       <div id="jtab-events" class="jtab-panel"></div>
       <div id="jtab-leaderboard" class="jtab-panel"></div>
+      <div id="jtab-market" class="jtab-panel"></div>
     </div>
     <div id="journal-footer">
       <span id="journal-summary"></span>
@@ -1833,6 +1862,7 @@ button:active { transform: scale(0.95); }
 //   1.0 = fast testing  (~27 sec radish)
 //   0.1 = ultra-fast    (~3 sec radish)
 const SECS_PER_DAY = 3.3;
+const MARKETPLACE_ENABLED = true; // set false to hide all Vege Stand UI
 
 const CROPS = [
   { id:'radish',      name:'Radish',      days:27,  speed:'Fast',   seedCost:2,  sellPrice:8,  xp:5,   unlockLevel:1 },
@@ -2301,6 +2331,11 @@ const DEFAULT_STATE = {
   compostLastCharged: 0,   // ms timestamp when last charge was added
   fertiliseMode: false,    // true when player is selecting a plot to fertilise
 
+  // Vege Stand marketplace
+  standListings: [],    // Array of active listing objects (escrow)
+  standEnabled: true,   // Whether this player's stand is open
+  standMaxSlots: 3,     // Max simultaneous listings
+
   // Exotic seed-saving counters (lifetime, survive prestige)
   seedsCollectedTotal: 0,  // total seed collections via seed-saving
   exoticMishapsTotal: 0,   // total plots lost to mishaps
@@ -2362,6 +2397,9 @@ function saveGame() {
       _exoticMishapsFix: G._exoticMishapsFix || 0,
       _exoticNearMisses: G._exoticNearMisses || 0,
       _heritageCollected: G._heritageCollected || 0,
+      standListings: G.standListings || [],
+      standEnabled: G.standEnabled !== false,
+      standMaxSlots: G.standMaxSlots || 3,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
   } catch(e) { console.warn('Save failed:', e); }
@@ -2402,6 +2440,9 @@ function loadGame() {
       G._exoticMishapsFix    = saved._exoticMishapsFix    ?? 0;
       G._exoticNearMisses    = saved._exoticNearMisses    ?? 0;
       G._heritageCollected   = saved._heritageCollected   ?? 0;
+      G.standListings  = saved.standListings  ?? [];
+      G.standEnabled   = saved.standEnabled   !== false;
+      G.standMaxSlots  = saved.standMaxSlots  ?? 3;
       G.fertiliseMode = false;
       G.walletAddress = saved.walletAddress ?? null;
       if (saved.plots) {
@@ -3259,6 +3300,7 @@ function renderAll() {
   renderShop();
   renderWateringCan();
   renderCompost();
+  if (MARKETPLACE_ENABLED) renderVegeStand();
   lbUpdateShareBtn();
 }
 
@@ -4668,6 +4710,9 @@ function checkAchievements() {
 let _currentJTab = 'crops';
 
 function openJournal() {
+  // Show/hide market tab based on MARKETPLACE_ENABLED
+  const mtb = document.getElementById('market-tab-btn');
+  if (mtb) mtb.style.display = MARKETPLACE_ENABLED ? '' : 'none';
   // Clear the new-badge dot
   _pendingNewAchievements = [];
   const dot = document.getElementById('journal-new-badge');
@@ -4704,6 +4749,7 @@ function renderJournal() {
   else if (_currentJTab === 'farm') renderFarmTab(earned);
   else if (_currentJTab === 'events') renderEventsTab(earned);
   else if (_currentJTab === 'leaderboard') renderLeaderboardTab();
+  else if (_currentJTab === 'market') renderMarketTab();
 }
 
 function renderCropsTab(earned) {
@@ -4918,6 +4964,564 @@ function payWithBSV(satoshis, ref, onSuccess, onFail) {
     // Dev mode stub — always fails gracefully
     console.log(`Dev mode: BSV payment stubbed (${satoshis} sats, ref: ${ref}). Use coins instead.`);
     onFail('Wallet not available in dev mode. Use coins instead.');
+  }
+}
+
+
+// ============================================================
+// VEGE STAND MARKETPLACE
+// ============================================================
+
+// Return escrowed listing seeds to inventory (when MARKETPLACE_ENABLED=false)
+function returnStandSeedsToStorage() {
+  if (!G.standListings || G.standListings.length === 0) return;
+  G.standListings.forEach(listing => {
+    const key = listing.heritage ? listing.cropId + '_heritage' : listing.cropId;
+    G.inventory[key] = (G.inventory[key] || 0) + listing.qty;
+  });
+  G.standListings = [];
+  saveGame();
+}
+
+// Vege Stand SVG — reflects open/closed and listing count
+function vegeSVG(listingCount, enabled) {
+  const signColor = enabled ? '#4CAF50' : '#888';
+  const signText  = enabled ? 'OPEN'    : 'CLOSED';
+  const itemDots  = listingCount > 0
+    ? ['#E57373','#FFB74D','#81C784']
+        .slice(0, Math.min(listingCount, 3))
+        .map((c, i) => `<circle cx="${22 + i * 8}" cy="24" r="5" fill="${c}" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"/>`)
+        .join('')
+    : '';
+  return `<svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="28" width="44" height="5" rx="2" fill="#8D6E63" stroke="#6D4C41" stroke-width="1"/>
+    <rect x="10" y="33" width="4" height="16" rx="2" fill="#795548" stroke="#6D4C41" stroke-width="1"/>
+    <rect x="42" y="33" width="4" height="16" rx="2" fill="#795548" stroke="#6D4C41" stroke-width="1"/>
+    <line x1="14" y1="42" x2="42" y2="38" stroke="#6D4C41" stroke-width="1.5" stroke-linecap="round"/>
+    <rect x="26" y="14" width="2" height="16" rx="1" fill="#795548"/>
+    <rect x="14" y="8" width="26" height="10" rx="3" fill="${signColor}" stroke="rgba(0,0,0,0.2)" stroke-width="0.5"/>
+    <text x="27" y="16.5" text-anchor="middle" font-size="6" font-weight="bold" fill="white" font-family="Arial">${signText}</text>
+    ${itemDots}
+    <text x="46" y="30" font-size="10">🥕</text>
+  </svg>`;
+}
+
+function hasListableSeeds() {
+  return Object.values(G.inventory).some(qty => {
+    const count = (typeof qty === 'object') ? (qty.qty || 0) : qty;
+    return count > 0;
+  });
+}
+
+function toggleStandOpen() {
+  G.standEnabled = !G.standEnabled;
+  saveGame();
+  renderVegeStand();
+}
+
+function renderVegeStand() {
+  const area = document.getElementById('vege-stand-area');
+  if (!area) return;
+  if (!MARKETPLACE_ENABLED) { area.style.display = 'none'; return; }
+  area.style.display = '';
+
+  const listings     = G.standListings || [];
+  const isFull       = listings.length >= (G.standMaxSlots || 3);
+  const canList      = G.walletConnected && !isFull && hasListableSeeds();
+
+  const listingRowsHtml = listings.map(l => {
+    const baseCropId  = l.cropId;
+    const crop        = CROP_MAP[baseCropId] || {};
+    const theme       = CROP_THEME[baseCropId] || { bg: '#1A1A1A' };
+    const nameDisplay = (l.heritage ? '✨ ' : '') + (crop.name || l.cropId) + (l.heritage ? ' H' : '');
+    const bsvDisplay  = (l.satoshis / 1e8).toFixed(5);
+    return `<div class="stand-listing-row" style="display:flex;align-items:center;gap:8px;padding:5px 6px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;margin-bottom:5px">
+      <svg width="22" height="22" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:4px;flex-shrink:0">${cropArt(baseCropId)}</svg>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:800;color:${l.heritage ? '#FFD700' : 'var(--text)'};">${nameDisplay} ×${l.qty}</div>
+        <div style="font-size:10px;color:var(--text-dim)">₿ ${bsvDisplay}</div>
+      </div>
+      <button onclick="cancelListing('${l.id}')" style="background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);border-radius:6px;padding:3px 7px;font-size:10px;color:#FF8A80;cursor:pointer">Cancel</button>
+    </div>`;
+  }).join('');
+
+  const emptyMsg = listings.length === 0
+    ? `<div style="font-size:11px;color:var(--text-dim);font-style:italic;padding:3px 0">Stand is empty — list some seeds!</div>`
+    : '';
+
+  area.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px">
+      <button id="vege-stand-btn" onclick="toggleStandOpen()" style="background:none;border:none;padding:0;cursor:pointer;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4));transition:transform 0.15s" title="${G.standEnabled ? 'Stand is open — click to close' : 'Stand is closed — click to open'}">
+        ${vegeSVG(listings.length, G.standEnabled)}
+      </button>
+      <div id="vege-stand-info" style="flex:1;min-width:0">
+        <div style="font-family:var(--ff-head);font-size:14px;color:var(--text);display:flex;align-items:center;gap:7px;margin-bottom:4px">
+          🥕 Vege Stand
+          <span style="font-size:9px;font-weight:700;background:${G.standEnabled ? 'rgba(111,207,58,0.18)' : 'rgba(100,100,100,0.2)'};color:${G.standEnabled ? 'var(--green-hi)' : 'var(--text-dim)'};border-radius:6px;padding:1px 5px">${G.standEnabled ? 'OPEN' : 'CLOSED'}</span>
+          <span style="font-size:10px;color:var(--text-dim);margin-left:2px">${listings.length}/${G.standMaxSlots || 3} slots</span>
+        </div>
+        <div id="vege-stand-listings">${listingRowsHtml}${emptyMsg}</div>
+        <button id="list-seeds-btn" onclick="showListingModal()"
+          style="margin-top:5px;background:${canList ? 'rgba(255,209,64,0.15)' : 'rgba(100,100,100,0.1)'};border:1px solid ${canList ? 'rgba(255,209,64,0.4)' : 'rgba(100,100,100,0.2)'};border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;color:${canList ? '#FFD700' : '#666'};cursor:${canList ? 'pointer' : 'not-allowed'}"
+          ${canList ? '' : 'disabled'}
+          title="${!G.walletConnected ? 'Connect wallet to list seeds for BSV' : isFull ? 'Stand is full (3 slots)' : !hasListableSeeds() ? 'No seeds in storage' : 'List seeds for sale'}">
+          + List Seeds${!G.walletConnected ? ' (wallet required)' : isFull ? ' (full)' : ''}
+        </button>
+      </div>
+    </div>`;
+}
+
+// ── Listing Modal ─────────────────────────────────────────────
+function calcSuggestedPrice(baseCropId, isHeritage, qty) {
+  const crop = CROP_MAP[baseCropId];
+  if (!crop) return 0.00001;
+  const base = crop.seedCost * 0.00001;
+  let mult = isHeritage ? 1.5 : 1.0;
+  if (qty >= 3) mult = isHeritage ? 4.0 : 2.8;
+  return Math.round(base * mult * qty * 100000) / 100000;
+}
+
+function showListingModal() {
+  if (!G.walletConnected) { notify('🔗 Connect your wallet to list seeds!', 'error'); return; }
+  if ((G.standListings || []).length >= (G.standMaxSlots || 3)) { notify('🥕 Stand is full — cancel a listing first.', 'error'); return; }
+
+  const available = Object.entries(G.inventory)
+    .map(([key, qty]) => {
+      const count = (typeof qty === 'object') ? (qty.qty || 0) : qty;
+      if (count <= 0) return null;
+      const isHeritage = key.endsWith('_heritage');
+      const baseCropId = isHeritage ? key.replace('_heritage', '') : key;
+      const crop = CROP_MAP[baseCropId];
+      return crop ? { key, count, isHeritage, baseCropId, crop } : null;
+    })
+    .filter(Boolean);
+
+  if (available.length === 0) { notify('🌱 No seeds in storage to list!', 'error'); return; }
+
+  const existing = document.getElementById('listing-modal-overlay');
+  if (existing) existing.remove();
+
+  const first = available[0];
+  const suggested = calcSuggestedPrice(first.baseCropId, first.isHeritage, 1);
+
+  const optionsHtml = available.map(e =>
+    `<option value="${e.key}" data-max="${e.count}" data-heritage="${e.isHeritage}" data-cropid="${e.baseCropId}" data-seedcost="${e.crop.seedCost}">
+      ${e.isHeritage ? '✨ Heritage ' : ''}${e.crop.name} (×${e.count})
+    </option>`
+  ).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'listing-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:450;display:flex;align-items:center;justify-content:center;padding:16px;animation:fade-in 0.2s ease';
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(160deg,#182B14 0%,#111D0F 100%);border:1.5px solid rgba(255,209,64,0.3);border-radius:18px;padding:22px 20px 18px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.7);animation:card-pop 0.25s cubic-bezier(0.34,1.56,0.64,1)">
+      <div style="font-family:var(--ff-head);font-size:18px;color:#FFD700;margin-bottom:14px;text-align:center">🥕 List Seeds for Sale</div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--text-dim);display:block;margin-bottom:4px">Crop</label>
+        <select id="listing-crop-select" onchange="updateListingModal()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:12px;font-family:var(--ff-body)">
+          ${optionsHtml}
+        </select>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--text-dim);display:block;margin-bottom:4px">Quantity (max: <span id="listing-qty-max">${first.count}</span>)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="changeListingQty(-1)" style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.08);color:var(--text);font-size:16px;cursor:pointer;border:1px solid var(--border)">−</button>
+          <span id="listing-qty-val" style="min-width:30px;text-align:center;font-size:14px;font-weight:800;color:var(--text)">1</span>
+          <button onclick="changeListingQty(1)" style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.08);color:var(--text);font-size:16px;cursor:pointer;border:1px solid var(--border)">+</button>
+          <span id="listing-packet-badge" style="display:none;font-size:9px;background:rgba(111,207,58,0.15);color:var(--green-hi);border-radius:4px;padding:1px 5px;font-weight:800">🌱 Packet</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--text-dim);display:block;margin-bottom:4px">Price (BSV)</label>
+        <input type="number" id="listing-price-input" step="0.00001" min="0.00001" value="${suggested.toFixed(5)}"
+          style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:12px;font-family:var(--ff-body)"/>
+        <div id="listing-price-hint" style="font-size:10px;color:var(--text-dim);margin-top:3px">Suggested: ₿ ${suggested.toFixed(5)}</div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
+        <button onclick="submitListing()" style="flex:1;background:rgba(255,209,64,0.2);border:1px solid rgba(255,209,64,0.5);border-radius:10px;padding:10px;font-size:13px;font-weight:800;color:#FFD700;cursor:pointer">List for Sale</button>
+        <button onclick="document.getElementById('listing-modal-overlay').remove()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--text-dim);cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function changeListingQty(delta) {
+  const select = document.getElementById('listing-crop-select');
+  const valEl  = document.getElementById('listing-qty-val');
+  if (!select || !valEl) return;
+  const max = parseInt(select.selectedOptions[0].dataset.max) || 1;
+  let val   = Math.max(1, Math.min(max, parseInt(valEl.textContent) + delta));
+  valEl.textContent = val;
+  updateListingModal();
+}
+
+function updateListingModal() {
+  const select     = document.getElementById('listing-crop-select');
+  const valEl      = document.getElementById('listing-qty-val');
+  const maxEl      = document.getElementById('listing-qty-max');
+  const hintEl     = document.getElementById('listing-price-hint');
+  const priceInput = document.getElementById('listing-price-input');
+  const packetBadge= document.getElementById('listing-packet-badge');
+  if (!select || !valEl) return;
+
+  const opt        = select.selectedOptions[0];
+  const max        = parseInt(opt.dataset.max) || 1;
+  const isHeritage = opt.dataset.heritage === 'true';
+  const baseCropId = opt.dataset.cropid;
+  let   qty        = parseInt(valEl.textContent) || 1;
+  qty = Math.max(1, Math.min(max, qty));
+  valEl.textContent = qty;
+  if (maxEl) maxEl.textContent = max;
+
+  const suggested = calcSuggestedPrice(baseCropId, isHeritage, qty);
+  if (hintEl)      hintEl.textContent     = 'Suggested: ₿ ' + suggested.toFixed(5) + (qty >= 3 ? ' (Packet rate)' : '');
+  if (priceInput)  priceInput.value       = suggested.toFixed(5);
+  if (packetBadge) packetBadge.style.display = qty >= 3 ? '' : 'none';
+}
+
+async function submitListing() {
+  const select     = document.getElementById('listing-crop-select');
+  const valEl      = document.getElementById('listing-qty-val');
+  const priceInput = document.getElementById('listing-price-input');
+  if (!select || !valEl || !priceInput) return;
+
+  const opt          = select.selectedOptions[0];
+  const inventoryKey = opt.value;
+  const qty          = parseInt(valEl.textContent) || 1;
+  const bsvPrice     = parseFloat(priceInput.value);
+  if (!bsvPrice || bsvPrice <= 0) { notify('⚠️ Please enter a valid price!', 'error'); return; }
+
+  const isHeritage = opt.dataset.heritage === 'true';
+  const baseCropId = opt.dataset.cropid;
+  const crop       = CROP_MAP[baseCropId];
+  if (!crop) return;
+
+  const currentCount = (typeof G.inventory[inventoryKey] === 'object')
+    ? (G.inventory[inventoryKey].qty || 0)
+    : (G.inventory[inventoryKey] || 0);
+  if (currentCount < qty) { notify('⚠️ Not enough seeds in storage!', 'error'); return; }
+
+  const satoshis   = Math.round(bsvPrice * 1e8);
+  const cropName   = (isHeritage ? 'Heritage ' : '') + crop.name + (qty >= 3 ? ' Packet' : '');
+  const listing    = {
+    id: 'listing-' + Date.now(),
+    cropId: baseCropId, cropName: cropName, qty: qty,
+    satoshis: satoshis, bsvPrice: bsvPrice, heritage: isHeritage,
+    sellerAddress: G.walletAddress, sellerName: G.farmerName || 'Farmer',
+    listedAt: Date.now(),
+  };
+
+  // Escrow: remove from inventory
+  if (typeof G.inventory[inventoryKey] === 'object') {
+    G.inventory[inventoryKey].qty -= qty;
+    if (G.inventory[inventoryKey].qty <= 0) delete G.inventory[inventoryKey];
+  } else {
+    G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) - qty;
+    if (G.inventory[inventoryKey] <= 0) delete G.inventory[inventoryKey];
+  }
+
+  G.standListings = G.standListings || [];
+  G.standListings.push(listing);
+  saveGame();
+
+  const modal = document.getElementById('listing-modal-overlay');
+  if (modal) modal.remove();
+
+  // Push to Supabase
+  const db = lbClient();
+  if (db) {
+    try {
+      const { error } = await db.from('listings').insert({
+        id: listing.id, seller_address: listing.sellerAddress,
+        seller_name: listing.sellerName,
+        crop_id: isHeritage ? baseCropId + '_heritage' : baseCropId,
+        crop_name: cropName, qty: qty, satoshis: satoshis,
+        bsv_price: bsvPrice, heritage: isHeritage, status: 'active',
+      });
+      if (error) {
+        console.warn('Supabase listing insert:', error.message);
+        notify('🥕 Listed locally (DB sync issue — can still cancel)', 'error');
+      } else {
+        notify('🥕 ' + qty + '× ' + cropName + ' listed for ₿ ' + bsvPrice.toFixed(5) + '!', 'unlock');
+      }
+    } catch(e) {
+      console.warn('Supabase error:', e);
+      notify('🥕 Listed locally (DB unavailable).', 'error');
+    }
+  } else {
+    notify('🥕 ' + qty + '× ' + cropName + ' listed for ₿ ' + bsvPrice.toFixed(5) + '!', 'unlock');
+  }
+
+  renderVegeStand();
+  renderStorage();
+}
+
+async function cancelListing(listingId) {
+  const listings = G.standListings || [];
+  const idx      = listings.findIndex(l => l.id === listingId);
+  if (idx === -1) { notify('⚠️ Listing not found!', 'error'); return; }
+  const listing  = listings[idx];
+
+  const inventoryKey = listing.heritage ? listing.cropId + '_heritage' : listing.cropId;
+  G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) + listing.qty;
+  G.standListings.splice(idx, 1);
+  saveGame();
+
+  const db = lbClient();
+  if (db) {
+    try { await db.from('listings').update({ status: 'cancelled' }).eq('id', listingId); }
+    catch(e) { console.warn('Supabase cancel:', e); }
+  }
+
+  renderVegeStand();
+  renderStorage();
+  notify('↩️ Listing cancelled — ' + listing.qty + '× ' + listing.cropName + ' returned to storage.', 'harvest');
+}
+
+// ── Market Browse Tab ─────────────────────────────────────────
+let _marketCache      = null;
+let _marketCacheTime  = 0;
+const MARKET_CACHE_TTL = 30000;
+let _marketFilter = 'all';
+let _marketSort   = 'newest';
+
+async function fetchActiveListings(forceRefresh) {
+  const db = lbClient();
+  if (!db) return [];
+  const now = Date.now();
+  if (!forceRefresh && _marketCache && (now - _marketCacheTime) < MARKET_CACHE_TTL) return _marketCache;
+  try {
+    const { data, error } = await db.from('listings').select('*').eq('status', 'active')
+      .order('listed_at', { ascending: false }).limit(50);
+    if (error) { console.warn('Market fetch:', error.message); return _marketCache || []; }
+    _marketCache     = data || [];
+    _marketCacheTime = now;
+    return _marketCache;
+  } catch(e) { console.warn('Market fetch error:', e); return _marketCache || []; }
+}
+
+function setMarketFilter(f) { _marketFilter = f; renderMarketListings(_marketCache || []); }
+function setMarketSort(s)   { _marketSort   = s; renderMarketListings(_marketCache || []); }
+
+async function refreshMarket() {
+  const c = document.getElementById('market-listings-container');
+  if (c) c.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:20px 0">⏳ Refreshing…</div>';
+  renderMarketListings(await fetchActiveListings(true));
+}
+
+async function renderMarketTab() {
+  const panel = document.getElementById('jtab-market');
+  if (!panel) return;
+
+  const filterBtns = ['all','standard','exotic','heritage'].map(f =>
+    `<button onclick="setMarketFilter('${f}')" style="font-size:10px;font-weight:800;font-family:var(--ff-body);padding:4px 10px;border-radius:14px;border:1px solid ${_marketFilter===f?'var(--xp-purple)':'var(--border)'};background:${_marketFilter===f?'var(--xp-purple)':'transparent'};color:${_marketFilter===f?'#1A0F2E':'var(--text-dim)'};cursor:pointer">
+      ${f.charAt(0).toUpperCase()+f.slice(1)}</button>`
+  ).join('');
+
+  const sortBtns = [['newest','Newest'],['price_asc','Price ↑'],['price_desc','Price ↓'],['qty','Qty']].map(([v,l]) =>
+    `<button onclick="setMarketSort('${v}')" style="font-size:10px;font-family:var(--ff-body);padding:3px 8px;border-radius:10px;border:1px solid ${_marketSort===v?'var(--green-hi)':'var(--border)'};background:${_marketSort===v?'rgba(111,207,58,0.15)':'transparent'};color:${_marketSort===v?'var(--green-hi)':'var(--text-dim)'};cursor:pointer">${l}</button>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;align-items:center">
+        ${filterBtns}
+        <button onclick="refreshMarket()" style="margin-left:auto;font-size:10px;font-weight:700;font-family:var(--ff-body);padding:4px 8px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer">↻ Refresh</button>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:10px;color:var(--text-dim)">Sort:</span>${sortBtns}
+      </div>
+    </div>
+    ${!G.walletConnected ? '<div style="font-size:11px;color:var(--text-dim);background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:10px">🔗 Connect your wallet to buy seeds from other farmers.</div>' : ''}
+    <div id="market-listings-container"><div style="text-align:center;color:var(--text-dim);font-size:12px;padding:20px 0">⏳ Loading listings…</div></div>`;
+
+  renderMarketListings(await fetchActiveListings(false));
+}
+
+function renderMarketListings(listings) {
+  const container = document.getElementById('market-listings-container');
+  if (!container) return;
+
+  // Filter
+  let filtered = listings.filter(l => {
+    if (_marketFilter === 'heritage') return l.heritage;
+    if (_marketFilter === 'exotic') {
+      const base = (l.crop_id || '').replace('_heritage','');
+      return CROP_MAP[base] && CROP_MAP[base].exotic;
+    }
+    if (_marketFilter === 'standard') {
+      const base = (l.crop_id || '').replace('_heritage','');
+      return CROP_MAP[base] && !CROP_MAP[base].exotic;
+    }
+    return true;
+  });
+
+  // Sort
+  filtered = [...filtered].sort((a, b) => {
+    if (_marketSort === 'price_asc')  return a.satoshis - b.satoshis;
+    if (_marketSort === 'price_desc') return b.satoshis - a.satoshis;
+    if (_marketSort === 'qty')        return b.qty - a.qty;
+    return new Date(b.listed_at || 0) - new Date(a.listed_at || 0);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:13px;padding:30px 0">🌱 No listings found.<br><span style="font-size:11px;opacity:0.7">Open the Vege Stand to list your exotic seeds!</span></div>';
+    return;
+  }
+
+  // Store listings for buy buttons
+  window._marketListings = {};
+  filtered.forEach(l => { window._marketListings[l.id] = l; });
+
+  const rowsHtml = filtered.map(l => {
+    const baseCropId  = (l.crop_id || '').replace('_heritage','');
+    const crop        = CROP_MAP[baseCropId] || {};
+    const theme       = CROP_THEME[baseCropId] || { bg: '#1A1A1A' };
+    const isExotic    = !!crop.exotic;
+    const isHeritage  = !!l.heritage;
+    const isPacket    = l.qty >= 3;
+    const isOwn       = G.walletAddress && l.seller_address === G.walletAddress;
+    const bsvDisplay  = (l.satoshis / 1e8).toFixed(5);
+
+    const badges = [
+      isHeritage ? `<span style="font-size:9px;background:rgba(255,215,0,0.2);color:#FFD700;border-radius:4px;padding:1px 4px;font-weight:800">✨ Heritage</span>` : '',
+      isExotic && !isHeritage ? `<span style="font-size:9px;background:rgba(167,139,250,0.15);color:var(--xp-purple);border-radius:4px;padding:1px 4px;font-weight:800">Exotic</span>` : '',
+      isPacket ? `<span style="font-size:9px;background:rgba(111,207,58,0.15);color:var(--green-hi);border-radius:4px;padding:1px 4px;font-weight:800">🌱 Packet</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    const buyCell = isOwn
+      ? `<span style="font-size:10px;color:var(--text-dim);font-style:italic">Your listing</span>`
+      : G.walletConnected
+        ? `<button class="market-buy-btn" data-id="${l.id}" style="background:rgba(255,209,64,0.15);border:1px solid rgba(255,209,64,0.4);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;color:#FFD700;cursor:pointer;white-space:nowrap">Buy ₿${bsvDisplay}</button>`
+        : `<span style="font-size:10px;color:var(--text-dim)">Wallet needed</span>`;
+
+    return `<div class="market-listing-row" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;background:rgba(20,42,16,0.6);border:1px solid ${isHeritage ? 'rgba(255,215,0,0.3)' : isOwn ? 'rgba(111,207,58,0.3)' : 'var(--border)'};margin-bottom:6px;${isOwn ? 'opacity:0.7' : ''}">
+      <svg width="32" height="32" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px;flex-shrink:0${isExotic ? ';box-shadow:0 0 4px '+theme.border : ''}">${cropArt(baseCropId)}</svg>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:800;color:${isHeritage ? '#FFD700' : 'var(--text)'}">${escHtml(l.crop_name || '')} ×${l.qty}</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:1px">${escHtml(l.seller_name || 'Farmer')} · ${l.listed_at ? timeSince(new Date(l.listed_at)) : 'recently'}</div>
+        ${badges ? `<div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap">${badges}</div>` : ''}
+      </div>
+      ${buyCell}
+    </div>`;
+  }).join('');
+
+  container.innerHTML = rowsHtml +
+    `<div style="text-align:center;font-size:10px;color:var(--text-dim);margin-top:8px">Cached 30s · ${filtered.length} listing${filtered.length !== 1 ? 's' : ''} shown</div>`;
+
+  // Wire buy buttons
+  container.querySelectorAll('.market-buy-btn').forEach(btn => {
+    btn.onclick = () => {
+      const listing = window._marketListings[btn.dataset.id];
+      if (listing) showBuyConfirm(listing);
+    };
+  });
+}
+
+function showBuyConfirm(listing) {
+  const existing = document.getElementById('buy-confirm-overlay');
+  if (existing) existing.remove();
+
+  window._pendingBuyListing = listing;
+
+  const baseCropId = (listing.crop_id || '').replace('_heritage','');
+  const crop       = CROP_MAP[baseCropId] || {};
+  const theme      = CROP_THEME[baseCropId] || { bg: '#1A1A1A' };
+  const bsvDisplay = (listing.satoshis / 1e8).toFixed(5);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'buy-confirm-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:510;display:flex;align-items:center;justify-content:center;padding:16px;animation:fade-in 0.2s ease';
+  overlay.innerHTML = `
+    <div style="background:linear-gradient(160deg,#182B14 0%,#111D0F 100%);border:1.5px solid rgba(255,209,64,0.4);border-radius:18px;padding:22px 20px 18px;max-width:320px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.8);animation:card-pop 0.25s cubic-bezier(0.34,1.56,0.64,1)">
+      <div style="margin-bottom:10px">
+        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:10px">${cropArt(baseCropId)}</svg>
+      </div>
+      <div style="font-family:var(--ff-head);font-size:17px;color:#FFD700;margin-bottom:4px">Confirm Purchase</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px;font-weight:800">${escHtml(listing.crop_name || '')} ×${listing.qty}</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Seller: ${escHtml(listing.seller_name || 'Farmer')}</div>
+      <div style="font-size:20px;font-weight:800;color:#FFD700;margin:10px 0">₿ ${bsvDisplay}</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Seeds added to storage on payment success. Bypasses level restrictions.</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button id="buy-confirm-btn" onclick="executePurchase(this)" style="flex:1;background:rgba(255,209,64,0.2);border:1px solid rgba(255,209,64,0.5);border-radius:10px;padding:10px;font-size:13px;font-weight:800;color:#FFD700;cursor:pointer">
+          Confirm Buy
+        </button>
+        <button onclick="document.getElementById('buy-confirm-overlay').remove()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--text-dim);cursor:pointer">
+          Cancel
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function executePurchase(btnEl) {
+  const listing = window._pendingBuyListing;
+  if (!listing) return;
+  if (!G.walletConnected) { notify('🔗 Connect your wallet to buy!', 'error'); return; }
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Paying…'; }
+
+  const ref = 'trade-' + listing.id;
+
+  if (window.platformSDK && G.walletConnected) {
+    window.platformSDK.sendCommand({
+      type: 'pay', ref: ref,
+      recipients: [{ address: listing.seller_address, value: listing.satoshis, note: 'Plot Twist Vege Stand: ' + (listing.crop_name || '') }],
+    });
+
+    window.platformSDK.onCommand(async (data) => {
+      if (data.type === 'pay-response' && data.payload.ref === ref) {
+        if (data.payload.success) {
+          // Grant seeds bypassing level restrictions
+          const baseCropId   = (listing.crop_id || '').replace('_heritage','');
+          const inventoryKey = listing.heritage ? baseCropId + '_heritage' : baseCropId;
+          G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) + listing.qty;
+          saveGame();
+          renderStorage();
+
+          const overlay = document.getElementById('buy-confirm-overlay');
+          if (overlay) overlay.remove();
+          window._pendingBuyListing = null;
+
+          // Update Supabase
+          const db = lbClient();
+          if (db) {
+            try {
+              await db.from('listings').update({
+                status: 'sold',
+                sold_at: new Date().toISOString(),
+                buyer_address: G.walletAddress,
+              }).eq('id', listing.id);
+
+              await db.from('purchases').insert({
+                id: 'purchase-' + Date.now(),
+                listing_id: listing.id, seller_address: listing.seller_address,
+                buyer_address: G.walletAddress,
+                crop_id: listing.crop_id, crop_name: listing.crop_name,
+                qty: listing.qty, satoshis: listing.satoshis,
+              });
+            } catch(e) { console.warn('Supabase purchase error:', e); }
+          }
+
+          // Bust cache & refresh market
+          _marketCache = null; _marketCacheTime = 0;
+          notify('🥕 Purchased ' + listing.qty + '× ' + (listing.crop_name || '') + '! Check your storage.', 'unlock');
+          const panel = document.getElementById('jtab-market');
+          if (panel && panel.classList.contains('active')) renderMarketTab();
+
+        } else {
+          if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Confirm Buy'; }
+          notify('₿ Purchase failed: ' + (data.payload.message || 'Payment failed'), 'error');
+        }
+      }
+    });
+  } else {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Confirm Buy'; }
+    notify('₿ Dev mode: wallet required for purchases.', 'error');
   }
 }
 
@@ -5237,6 +5841,14 @@ function init() {
 
   buildAllAchievements();
   checkAchievements(); // evaluate on load (for returning players)
+  // Return escrowed stand seeds if marketplace is disabled
+  if (!MARKETPLACE_ENABLED) {
+    returnStandSeedsToStorage();
+  } else {
+    // Show stand area
+    const standArea = document.getElementById('vege-stand-area');
+    if (standArea) standArea.style.display = '';
+  }
   renderAll();
 
   // Schedule first event and merchant
