@@ -3222,7 +3222,7 @@ function tick() {
   let changed = false;
   const now = Date.now();
   G.plots.forEach(plot => {
-    if (plot.cropId && plot.plantedAt && !plot.ready) {
+    if (plot.cropId && plot.plantedAt && !plot.ready && !plot.seeding) {
       const crop = CROP_MAP[plot.cropId];
       if (crop && (now - plot.plantedAt) >= crop.gameSecs * 1000) {
         plot.ready = true;
@@ -3439,7 +3439,7 @@ function renderPlots() {
             <div style="position:absolute;top:4px;right:4px;font-size:11px">✨</div>
             ${fertBadge}
           </div>
-          <div class="plot-footer"><span style="color:#FFD700;font-weight:800;font-size:11px">✨ Exotic Ready! Tap to decide</span></div>
+          <div class="plot-footer"><span style="color:#FFD700;font-weight:800;font-size:11px">✨ Harvest or Seed?</span></div>
         </div>`;
       }
       return `<div class="plot-tile ready" data-idx="${idx}" onclick="harvestCrop(${idx})">
