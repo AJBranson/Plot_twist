@@ -2348,7 +2348,7 @@ function loadGame() {
       G._sunBonusCount     = saved._sunBonusCount     ?? 0;
       G._beeBoostCount     = saved._beeBoostCount     ?? 0;
       G.wateringCanLastUsed = saved.wateringCanLastUsed ?? 0;
-      G.compostCharges    = saved.compostCharges    ?? 5;
+      G.compostCharges    = Math.min(saved.compostCharges ?? 5, 5); // clamp — never exceed max
       G.compostLastCharged = saved.compostLastCharged ?? 0;
       G.seedsCollectedTotal  = saved.seedsCollectedTotal  ?? 0;
       G.exoticMishapsTotal   = saved.exoticMishapsTotal   ?? 0;
@@ -3086,7 +3086,7 @@ function applyFertiliser(idx) {
   if (plot.ready)      { notify('🌿 Harvest first — fertiliser applies before harvest!', 'error'); return; }
 
   plot.fertilised = true;
-  G.compostCharges--;
+  G.compostCharges = Math.max(0, G.compostCharges - 1);
   if (G.compostCharges < COMPOST_MAX_CHARGES && G.compostLastCharged === 0) {
     G.compostLastCharged = Date.now();
   }
