@@ -1386,7 +1386,7 @@ button:active { transform: scale(0.95); }
   flex-direction: column;
   box-shadow: 0 24px 80px rgba(0,0,0,0.8);
   animation: card-pop 0.3s cubic-bezier(0.34,1.4,0.64,1);
-  overflow: hidden;
+  overflow: visible; /* allow tooltip to extend below header */
 }
 
 #journal-header {
@@ -1447,7 +1447,9 @@ button:active { transform: scale(0.95); }
 #journal-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px 14px;
+  border-radius: 0 0 18px 18px;
 }
 #journal-body::-webkit-scrollbar { width: 4px; }
 #journal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -1830,11 +1832,11 @@ button:active { transform: scale(0.95); }
     <div id="journal-header">
       <div id="journal-title">📖 Crop Journal</div>
       <div id="journal-tabs">
-        <button class="jtab active" onclick="showJTab('crops')">Crops</button>
-        <button class="jtab" onclick="showJTab('farm')">Farm</button>
-        <button class="jtab" onclick="showJTab('events')">Events</button>
-        <button class="jtab" onclick="showJTab('leaderboard')">🏆</button>
-        <button class="jtab" id="market-tab-btn" onclick="showJTab('market')" style="display:none">🥕</button>
+        <button class="jtab active" onclick="showJTab('crops')" title="Crop Journal — harvest counts &amp; milestone badges for every crop">Crops</button>
+        <button class="jtab" onclick="showJTab('farm')" title="Farm Achievements — harvests, coins, plots, levels &amp; prestige milestones">Farm</button>
+        <button class="jtab" onclick="showJTab('events')" title="Events &amp; Merchant — random event history, merchant deals &amp; exotic farming achievements">Events</button>
+        <button class="jtab" onclick="showJTab('leaderboard')" title="Leaderboard — share your Farm Score &amp; see the top farmers">🏆</button>
+        <button class="jtab" id="market-tab-btn" onclick="showJTab('market')" title="Vege Stand Market — browse &amp; buy exotic seeds from other farmers" style="display:none">🥕</button>
       </div>
       <button class="journal-close-btn" onclick="closeJournal()">✕</button>
     </div>
