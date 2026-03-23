@@ -3352,23 +3352,26 @@ function renderStats() {
   const bsvStatus = document.getElementById('bsv-status');
   const bsvBtn = document.querySelector('#bsv-pill button');
   if (G.walletConnected) {
-    bsvStatus.textContent = '₿ ' + G.walletAddress.substring(0,10) + '…';
+    const walletLabel = _yoursWalletActive ? '👛 ' : '₿ ';
+    bsvStatus.textContent = walletLabel + G.walletAddress.substring(0,10) + '…';
     if (bsvBtn) {
       bsvBtn.textContent = 'Connected ✓';
       bsvBtn.style.background = 'var(--green-hi)';
       bsvBtn.style.color = '#0A1F06';
       bsvBtn.disabled = false;
-      bsvBtn.title = 'Click to disconnect wallet';
+      bsvBtn.title = (_yoursWalletActive ? 'Yours Wallet' : 'Metanet Wallet') + ' — click to disconnect';
       bsvBtn.onclick = disconnectWallet;
     }
   } else {
-    bsvStatus.textContent = 'Wallet: Local Mode';
+    const yoursReady = window.yours && typeof window.yours.connect === 'function';
+    const inFrame = window.self !== window.top;
+    bsvStatus.textContent = yoursReady && !inFrame ? 'Yours Wallet detected' : 'Wallet: Local Mode';
     if (bsvBtn) {
-      bsvBtn.textContent = 'Connect';
+      bsvBtn.textContent = yoursReady && !inFrame ? 'Connect Yours' : 'Connect';
       bsvBtn.style.background = '';
       bsvBtn.style.color = '';
       bsvBtn.disabled = false;
-      bsvBtn.title = '';
+      bsvBtn.title = yoursReady && !inFrame ? 'Connect Yours Wallet (BSV extension)' : 'Connect wallet';
       bsvBtn.onclick = connectWallet;
     }
   }
@@ -4899,33 +4902,120 @@ function renderEventsTab(earned) {
 // ============================================================
 // BSV WALLET INTEGRATION (stub)
 // ============================================================
+// Track which wallet provider is active for this session
+let _yoursWalletActive = false;
+
 function connectWallet() {
-  if (window.platformSDK) {
-    // Real Metanet connection
-    window.platformSDK.sendCommand({ type: 'connection', navbg: '#111D0F' });
-    window.platformSDK.onCommand((data) => {
-      if (data.type === 'connection-response') {
-        if (data.payload && !data.payload.anonymous && data.payload.wallet) {
-          G.walletConnected = true;
-          G.walletAddress = data.payload.wallet.address;
-          saveGame();
-          renderAll(); // re-render everything so BSV buttons activate
-          notify('✅ Wallet connected!', 'unlock');
-        } else {
-          notify('👤 Running anonymously — coins only mode.', 'error');
-          setPlayerState('anonymous');
-        }
+  const inMetanetFrame = window.self !== window.top;
+
+  // Inside Metanet iframe — use Metanet SDK immediately
+  if (inMetanetFrame && window.platformSDK) {
+    connectMetanet();
+    return;
+  }
+
+  // Helper: check both current (window.yours) and legacy (window.panda) property names
+  function getYoursProvider() {
+    if (window.yours && typeof window.yours.connect === 'function') return window.yours;
+    if (window.panda && typeof window.panda.connect === 'function') return window.panda;
+    return null;
+  }
+
+  // If already present, connect immediately
+  const provider = getYoursProvider();
+  if (provider) { connectYoursWallet(provider); return; }
+
+  // Not yet injected — show detecting state
+  const btn = document.querySelector('#bsv-pill button');
+  if (btn) { btn.textContent = 'Detecting…'; btn.disabled = true; }
+
+  // Listen for the wallet's own ready event (fired by some versions)
+  const onYoursReady = () => {
+    clearInterval(poll);
+    window.removeEventListener('yours#initialized', onYoursReady);
+    window.removeEventListener('panda#initialized', onYoursReady);
+    const p = getYoursProvider();
+    if (p) connectYoursWallet(p);
+  };
+  window.addEventListener('yours#initialized', onYoursReady);
+  window.addEventListener('panda#initialized', onYoursReady);
+
+  // Also poll every 100ms for up to 5 seconds
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const p = getYoursProvider();
+    if (p) {
+      clearInterval(poll);
+      window.removeEventListener('yours#initialized', onYoursReady);
+      window.removeEventListener('panda#initialized', onYoursReady);
+      connectYoursWallet(p);
+      return;
+    }
+    if (attempts >= 50) { // 50 × 100ms = 5 seconds
+      clearInterval(poll);
+      window.removeEventListener('yours#initialized', onYoursReady);
+      window.removeEventListener('panda#initialized', onYoursReady);
+      if (btn) { btn.textContent = 'Connect'; btn.disabled = false; }
+
+      // Diagnose the likely cause
+      const isFileProtocol = window.location.protocol === 'file:';
+      if (isFileProtocol) {
+        notify('⚠️ Yours Wallet cannot inject into file:// pages. Serve the game via a local web server (e.g. Live Server in VS Code).', 'error');
+      } else {
+        notify('🔧 Yours Wallet not detected. Is it installed and unlocked in Brave?', 'error');
       }
-    });
-  } else {
-    // Local dev mode — stub
-    console.log('Dev mode: BSV wallet not available. Running in coins-only mode.');
-    notify('🔧 Dev mode: BSV not available. Use coins!', 'error');
-    setPlayerState('anonymous');
+      setPlayerState('anonymous');
+    }
+  }, 100);
+}
+
+function connectMetanet() {
+  window.platformSDK.sendCommand({ type: 'connection', navbg: '#111D0F' });
+  window.platformSDK.onCommand((data) => {
+    if (data.type === 'connection-response') {
+      if (data.payload && !data.payload.anonymous && data.payload.wallet) {
+        _yoursWalletActive = false;
+        G.walletConnected = true;
+        G.walletAddress = data.payload.wallet.address;
+        saveGame();
+        renderAll();
+        notify('✅ Metanet wallet connected!', 'unlock');
+      } else {
+        notify('👤 Running anonymously — coins only mode.', 'error');
+        setPlayerState('anonymous');
+      }
+    }
+  });
+}
+
+async function connectYoursWallet(provider) {
+  try {
+    const pubKey = await provider.connect();
+    if (!pubKey) { notify('🔗 Yours Wallet connection cancelled.', 'error'); return; }
+    const addrs = await provider.getAddresses();
+    if (!addrs || !addrs.bsvAddress) {
+      notify('⚠️ Could not get BSV address from Yours Wallet.', 'error'); return;
+    }
+    _yoursWalletActive = true;
+    window._yoursProvider = provider; // store reference for payments
+    G.walletConnected = true;
+    G.walletAddress = addrs.bsvAddress;
+    saveGame();
+    renderAll();
+    notify('✅ Yours Wallet connected! (' + addrs.bsvAddress.substring(0,10) + '…)', 'unlock');
+  } catch(e) {
+    console.warn('Yours Wallet connect error:', e);
+    notify('⚠️ Yours Wallet error: ' + (e.message || e), 'error');
   }
 }
 
 function disconnectWallet() {
+  if (_yoursWalletActive && window._yoursProvider && window._yoursProvider.disconnect) {
+    window._yoursProvider.disconnect().catch(() => {});
+  }
+  _yoursWalletActive = false;
+  window._yoursProvider = null;
   G.walletConnected = false;
   G.walletAddress = null;
   saveGame();
@@ -4942,35 +5032,45 @@ function setPlayerState(state) {
 }
 
 /**
- * Pay with BSV — stub for dev mode.
- * When on Metanet.page, this sends a real pay command.
- * @param {number} satoshis  — coinPrice * 1000
- * @param {string} ref       — unique reference
- * @param {Function} onSuccess — called with payload on success
- * @param {Function} onFail    — called with error message on fail
+ * Pay with BSV — supports Metanet and Yours Wallet.
+ * @param {number} satoshis  — amount in satoshis
+ * @param {string} ref       — unique reference string
+ * @param {Function} onSuccess — called on success
+ * @param {Function} onFail    — called with error string on fail
+ * @param {string} [toAddress] — override recipient (used by market purchases)
  */
-function payWithBSV(satoshis, ref, onSuccess, onFail) {
-  if (window.platformSDK && G.walletConnected) {
-    // Real payment via Metanet
-    const GAME_BSV_ADDRESS = '1LMaShk9VaQSWrsEYUukuoWMEVAJckrxCM';
+function payWithBSV(satoshis, ref, onSuccess, onFail, toAddress) {
+  const GAME_BSV_ADDRESS = '1LMaShk9VaQSWrsEYUukuoWMEVAJckrxCM';
+  const recipient = toAddress || GAME_BSV_ADDRESS;
+
+  if (_yoursWalletActive && window._yoursProvider && G.walletConnected) {
+    // Yours Wallet — simple async/await, no message bus needed
+    window._yoursProvider.sendBsv([{ address: recipient, satoshis: satoshis }])
+      .then(result => {
+        if (result && result.txid) {
+          onSuccess({ txid: result.txid, ref });
+        } else {
+          onFail('Payment returned no txid');
+        }
+      })
+      .catch(e => onFail(e.message || 'Yours Wallet payment failed'));
+
+  } else if (window.platformSDK && G.walletConnected) {
+    // Metanet — postMessage protocol
     window.platformSDK.sendCommand({
-      type: 'pay',
-      ref: ref,
-      recipients: [{ address: GAME_BSV_ADDRESS, value: satoshis, note: 'Plot Twist purchase' }],
+      type: 'pay', ref: ref,
+      recipients: [{ address: recipient, value: satoshis, note: 'Plot Twist purchase' }],
     });
     window.platformSDK.onCommand((data) => {
       if (data.type === 'pay-response' && data.payload.ref === ref) {
-        if (data.payload.success) {
-          onSuccess(data.payload);
-        } else {
-          onFail(data.payload.message || 'Payment failed');
-        }
+        if (data.payload.success) { onSuccess(data.payload); }
+        else { onFail(data.payload.message || 'Payment failed'); }
       }
     });
+
   } else {
-    // Dev mode stub — always fails gracefully
-    console.log(`Dev mode: BSV payment stubbed (${satoshis} sats, ref: ${ref}). Use coins instead.`);
-    onFail('Wallet not available in dev mode. Use coins instead.');
+    console.log(`No wallet: BSV payment stubbed (${satoshis} sats, ref: ${ref}).`);
+    onFail('No wallet connected. Use coins instead.');
   }
 }
 
@@ -5509,65 +5609,71 @@ async function executePurchase(btnEl) {
 
   const ref = 'trade-' + listing.id;
 
-  if (window.platformSDK && G.walletConnected) {
+  // Shared post-payment logic (called by both wallet paths on success)
+  async function _onPurchaseSuccess() {
+    const baseCropId   = (listing.crop_id || '').replace('_heritage','');
+    const inventoryKey = listing.heritage ? baseCropId + '_heritage' : baseCropId;
+    G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) + listing.qty;
+    saveGame();
+    renderStorage();
+    const overlay = document.getElementById('buy-confirm-overlay');
+    if (overlay) overlay.remove();
+    window._pendingBuyListing = null;
+    const db = lbClient();
+    if (db) {
+      try {
+        await db.from('listings').update({
+          status: 'sold', sold_at: new Date().toISOString(), buyer_address: G.walletAddress,
+        }).eq('id', listing.id);
+        await db.from('purchases').insert({
+          id: 'purchase-' + Date.now(),
+          listing_id: listing.id, seller_address: listing.seller_address,
+          buyer_address: G.walletAddress,
+          crop_id: listing.crop_id, crop_name: listing.crop_name,
+          qty: listing.qty, satoshis: listing.satoshis,
+        });
+      } catch(e) { console.warn('Supabase purchase error:', e); }
+    }
+    _marketCache = null; _marketCacheTime = 0;
+    notify('🥕 Purchased ' + listing.qty + '× ' + (listing.crop_name || '') + '! Check your storage.', 'unlock');
+    const panel = document.getElementById('jtab-market');
+    if (panel && panel.classList.contains('active')) renderMarketTab();
+  }
+
+  function _onPurchaseFail(msg) {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Confirm Buy'; }
+    notify('₿ Purchase failed: ' + (msg || 'Payment failed'), 'error');
+  }
+
+  if (_yoursWalletActive && window._yoursProvider && G.walletConnected) {
+    // Yours Wallet — direct async/await, seller receives BSV directly
+    window._yoursProvider.sendBsv([{
+      address: listing.seller_address,
+      satoshis: listing.satoshis,
+    }]).then(result => {
+      if (result && result.txid) { _onPurchaseSuccess(); }
+      else { _onPurchaseFail('No txid returned'); }
+    }).catch(e => _onPurchaseFail(e.message || 'Yours Wallet error'));
+
+  } else if (window.platformSDK && G.walletConnected) {
+    // Metanet — postMessage one-time listener
     window.platformSDK.sendCommand({
       type: 'pay', ref: ref,
-      recipients: [{ address: listing.seller_address, value: listing.satoshis, note: 'Plot Twist Vege Stand: ' + (listing.crop_name || '') }],
+      recipients: [{ address: listing.seller_address, value: listing.satoshis,
+                     note: 'Plot Twist Vege Stand: ' + (listing.crop_name || '') }],
     });
-
-    // One-time listener — removes itself after handling the matching response
     const _payHandler = async (event) => {
       const data = event.data;
       if (!data || data.command !== 'ninja-app-command') return;
       if (data.type !== 'pay-response' || data.payload.ref !== ref) return;
       window.removeEventListener('message', _payHandler);
-      if (data.payload.success) {
-          // Grant seeds bypassing level restrictions
-          const baseCropId   = (listing.crop_id || '').replace('_heritage','');
-          const inventoryKey = listing.heritage ? baseCropId + '_heritage' : baseCropId;
-          G.inventory[inventoryKey] = (G.inventory[inventoryKey] || 0) + listing.qty;
-          saveGame();
-          renderStorage();
-
-          const overlay = document.getElementById('buy-confirm-overlay');
-          if (overlay) overlay.remove();
-          window._pendingBuyListing = null;
-
-          // Update Supabase
-          const db = lbClient();
-          if (db) {
-            try {
-              await db.from('listings').update({
-                status: 'sold',
-                sold_at: new Date().toISOString(),
-                buyer_address: G.walletAddress,
-              }).eq('id', listing.id);
-
-              await db.from('purchases').insert({
-                id: 'purchase-' + Date.now(),
-                listing_id: listing.id, seller_address: listing.seller_address,
-                buyer_address: G.walletAddress,
-                crop_id: listing.crop_id, crop_name: listing.crop_name,
-                qty: listing.qty, satoshis: listing.satoshis,
-              });
-            } catch(e) { console.warn('Supabase purchase error:', e); }
-          }
-
-          // Bust cache & refresh market
-          _marketCache = null; _marketCacheTime = 0;
-          notify('🥕 Purchased ' + listing.qty + '× ' + (listing.crop_name || '') + '! Check your storage.', 'unlock');
-          const panel = document.getElementById('jtab-market');
-          if (panel && panel.classList.contains('active')) renderMarketTab();
-
-        } else {
-          if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Confirm Buy'; }
-          notify('₿ Purchase failed: ' + (data.payload.message || 'Payment failed'), 'error');
-        }
+      if (data.payload.success) { await _onPurchaseSuccess(); }
+      else { _onPurchaseFail(data.payload.message); }
     };
     window.addEventListener('message', _payHandler);
+
   } else {
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Confirm Buy'; }
-    notify('₿ Dev mode: wallet required for purchases.', 'error');
+    _onPurchaseFail('No wallet connected');
   }
 }
 
