@@ -4356,7 +4356,12 @@ function checkMerchant() {
     const remaining = Math.max(0, G.merchantExpiry - now);
     const timerEl = document.getElementById('merchant-timer');
     if (timerEl) timerEl.textContent = 'Leaves in ' + formatTime(remaining / 1000);
-    if (remaining <= 0) dismissMerchant();
+    if (remaining <= 0) { dismissMerchant(); return; }
+    // Re-check affordability each tick so button enables when coins arrive
+    const dealBtn = document.getElementById('merchant-deal-btn');
+    if (dealBtn && window._merchantCanAfford) {
+      dealBtn.disabled = !window._merchantCanAfford();
+    }
     return;
   }
 
