@@ -2404,7 +2404,10 @@ function saveGame() {
       standMaxSlots: G.standMaxSlots || 3,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
-  } catch(e) { console.warn('Save failed:', e); }
+  } catch(e) {
+    console.warn('Save failed:', e);
+    notify('⚠️ Game save failed. Your progress may not be preserved. Check your browser storage settings.', 'error');
+  }
 }
 
 function loadGame() {
@@ -2464,7 +2467,10 @@ function loadGame() {
       G.shopExpanded = null;
       return;
     }
-  } catch(e) { console.warn('Load failed:', e); }
+  } catch(e) {
+    console.warn('Load failed:', e);
+    notify('⚠️ Could not load saved game. Starting with default settings.', 'error');
+  }
   G = JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 
@@ -3263,32 +3269,38 @@ function renderCompost() {
 // TICK — runs every second
 // ============================================================
 function tick() {
-  let changed = false;
-  const now = Date.now();
-  G.plots.forEach(plot => {
-    if (plot.cropId && plot.plantedAt && !plot.ready && !plot.seeding) {
-      const crop = CROP_MAP[plot.cropId];
-      if (crop && (now - plot.plantedAt) >= crop.gameSecs * 1000) {
-        plot.ready = true;
-        changed = true;
-        notify(`✨ ${crop.name} is ready to harvest!`, 'harvest');
+  try {
+    let changed = false;
+    const now = Date.now();
+    G.plots.forEach(plot => {
+      if (plot.cropId && plot.plantedAt && !plot.ready && !plot.seeding) {
+        const crop = CROP_MAP[plot.cropId];
+        if (crop && (now - plot.plantedAt) >= crop.gameSecs * 1000) {
+          plot.ready = true;
+          changed = true;
+          notify(`✨ ${crop.name} is ready to harvest!`, 'harvest');
+        }
       }
+    });
+    checkRandomEvent();
+    checkMerchant();
+    tickCompost();
+    tickSeedSaving();
+    renderStats();
+    renderWateringCan();
+    renderCompost();
+    if (changed) {
+      saveGame();
+      renderPlots();
+      renderStorage();
+      renderShop();
+    } else {
+      renderPlotsOnly();
     }
-  });
-  checkRandomEvent();
-  checkMerchant();
-  tickCompost();
-  tickSeedSaving();
-  renderStats();
-  renderWateringCan();
-  renderCompost();
-  if (changed) {
-    saveGame();
-    renderPlots();
-    renderStorage();
-    renderShop();
-  } else {
-    renderPlotsOnly();
+  } catch(e) {
+    console.error('Game tick error:', e);
+    // Continue running - don't crash the game
+    notify('⚠️ Game encountered an error but is still running.', 'error');
   }
 }
 
@@ -4919,7 +4931,7 @@ function connectWallet() {
     });
   } else {
     console.log('Dev mode: no Metanet SDK. Running in coins-only mode.');
-    notify('🔧 Open inside Metanet.page to connect a wallet.', 'error');
+    notify('🔧 Wallet connection requires Metanet.page environment. Running in coins-only mode.', 'error');
     setPlayerState('anonymous');
   }
 }
@@ -5250,23 +5262,36 @@ async function submitListing() {
   // Push to Supabase
   const db = lbClient();
   if (db) {
-    try {
-      const { error } = await db.from('listings').insert({
-        id: listing.id, seller_address: listing.sellerAddress,
-        seller_name: listing.sellerName,
-        crop_id: isHeritage ? baseCropId + '_heritage' : baseCropId,
-        crop_name: cropName, qty: qty, satoshis: satoshis,
-        bsv_price: bsvPrice, heritage: isHeritage, status: 'active',
-      });
-      if (error) {
-        console.warn('Supabase listing insert:', error.message);
-        notify('🥕 Listed locally (DB sync issue — can still cancel)', 'error');
-      } else {
+    const maxRetries = 3;
+    let lastError;
+    let success = false;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const { error } = await db.from('listings').insert({
+          id: listing.id, seller_address: listing.sellerAddress,
+          seller_name: listing.sellerName,
+          crop_id: isHeritage ? baseCropId + '_heritage' : baseCropId,
+          crop_name: cropName, qty: qty, satoshis: satoshis,
+          bsv_price: bsvPrice, heritage: isHeritage, status: 'active',
+        });
+        if (error) throw error;
+
+        success = true;
         notify('🥕 ' + qty + '× ' + cropName + ' listed for ₿ ' + bsvPrice.toFixed(5) + '!', 'unlock');
+        break;
+      } catch(e) {
+        lastError = e;
+        console.warn(`Listing submit attempt ${attempt}/${maxRetries} failed:`, e.message);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
       }
-    } catch(e) {
-      console.warn('Supabase error:', e);
-      notify('🥕 Listed locally (DB unavailable).', 'error');
+    }
+
+    if (!success) {
+      console.warn('Listing submit failed after all retries:', lastError.message);
+      notify('🥕 Listed locally (DB sync issue — can still cancel)', 'error');
     }
   } else {
     notify('🥕 ' + qty + '× ' + cropName + ' listed for ₿ ' + bsvPrice.toFixed(5) + '!', 'unlock');
@@ -5289,8 +5314,26 @@ async function cancelListing(listingId) {
 
   const db = lbClient();
   if (db) {
-    try { await db.from('listings').update({ status: 'cancelled' }).eq('id', listingId); }
-    catch(e) { console.warn('Supabase cancel:', e); }
+    const maxRetries = 3;
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await db.from('listings').update({ status: 'cancelled' }).eq('id', listingId);
+        break; // Success, exit retry loop
+      } catch(e) {
+        lastError = e;
+        console.warn(`Cancel listing attempt ${attempt}/${maxRetries} failed:`, e.message);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+
+    if (lastError) {
+      console.warn('Cancel listing failed after all retries:', lastError.message);
+      // Still proceed with local cancellation - the listing is removed locally
+    }
   }
 
   renderVegeStand();
@@ -5310,15 +5353,32 @@ async function fetchActiveListings(forceRefresh) {
   if (!db) return [];
   const now = Date.now();
   if (!forceRefresh && _marketCache && (now - _marketCacheTime) < MARKET_CACHE_TTL) return _marketCache;
-  try {
-    const { data, error } = await db.from('listings').select('*')
-      .in('status', ['active', 'paused'])
-      .order('listed_at', { ascending: false }).limit(50);
-    if (error) { console.warn('Market fetch:', error.message); return _marketCache || []; }
-    _marketCache     = data || [];
-    _marketCacheTime = now;
-    return _marketCache;
-  } catch(e) { console.warn('Market fetch error:', e); return _marketCache || []; }
+
+  const maxRetries = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { data, error } = await db.from('listings').select('*')
+        .in('status', ['active', 'paused'])
+        .order('listed_at', { ascending: false }).limit(50);
+      if (error) throw error;
+
+      _marketCache = data || [];
+      _marketCacheTime = now;
+      return _marketCache;
+    } catch(e) {
+      lastError = e;
+      console.warn(`Market fetch attempt ${attempt}/${maxRetries} failed:`, e.message);
+      if (attempt < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+
+  console.warn('Market fetch failed after all retries:', lastError.message);
+  return _marketCache || []; // Return cached data if available, otherwise empty array
 }
 
 function setMarketFilter(f) {
@@ -5528,18 +5588,53 @@ async function executePurchase(btnEl) {
         window._pendingBuyListing = null;
         const db = lbClient();
         if (db) {
-          try {
-            await db.from('listings').update({
-              status: 'sold', sold_at: new Date().toISOString(), buyer_address: G.walletAddress,
-            }).eq('id', listing.id);
-            await db.from('purchases').insert({
-              id: 'purchase-' + Date.now(),
-              listing_id: listing.id, seller_address: listing.seller_address,
-              buyer_address: G.walletAddress,
-              crop_id: listing.crop_id, crop_name: listing.crop_name,
-              qty: listing.qty, satoshis: listing.satoshis,
-            });
-          } catch(e) { console.warn('Supabase purchase error:', e); }
+          const maxRetries = 3;
+          let updateSuccess = false;
+          let insertSuccess = false;
+          let lastError;
+
+          // Update listing status
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              await db.from('listings').update({
+                status: 'sold', sold_at: new Date().toISOString(), buyer_address: G.walletAddress,
+              }).eq('id', listing.id);
+              updateSuccess = true;
+              break;
+            } catch(e) {
+              lastError = e;
+              console.warn(`Purchase update attempt ${attempt}/${maxRetries} failed:`, e.message);
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+              }
+            }
+          }
+
+          // Insert purchase record
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              await db.from('purchases').insert({
+                id: 'purchase-' + Date.now(),
+                listing_id: listing.id, seller_address: listing.seller_address,
+                buyer_address: G.walletAddress,
+                crop_id: listing.crop_id, crop_name: listing.crop_name,
+                qty: listing.qty, satoshis: listing.satoshis,
+              });
+              insertSuccess = true;
+              break;
+            } catch(e) {
+              lastError = e;
+              console.warn(`Purchase insert attempt ${attempt}/${maxRetries} failed:`, e.message);
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+              }
+            }
+          }
+
+          if (!updateSuccess || !insertSuccess) {
+            console.warn('Purchase database operations failed:', lastError.message);
+            // Still proceed with local inventory update - the purchase was successful
+          }
         }
         _marketCache = null; _marketCacheTime = 0;
         notify('🥕 Purchased ' + listing.qty + '× ' + (listing.crop_name || '') + '! Check your storage.', 'unlock');
@@ -5601,23 +5696,39 @@ async function lbSubmitScore() {
   const levelDat = getLevelData(G.level);
 
   // lb_users: upsert by wallet address — update name/score if improved
-  const { error: ue } = await db.from('lb_users').upsert({
-    address:     G.walletAddress,
-    farmer_name: G.farmerName  || 'Farmer',
-    farm_name:   G.farmName    || 'My Farm',
-    score:       score,
-    prestige:    G.prestige    || 0,
-    level:       G.level,
-    level_title: levelDat ? levelDat.title : '',
-    updated_at:  new Date().toISOString(),
-  }, { onConflict: 'address', ignoreDuplicates: false });
+  const maxRetries = 3;
+  let lastError;
 
-  if (ue) { console.warn('LB upsert error:', ue.message); return false; }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { error: ue } = await db.from('lb_users').upsert({
+        address:     G.walletAddress,
+        farmer_name: G.farmerName  || 'Farmer',
+        farm_name:   G.farmName    || 'My Farm',
+        score:       score,
+        prestige:    G.prestige    || 0,
+        level:       G.level,
+        level_title: levelDat ? levelDat.title : '',
+        updated_at:  new Date().toISOString(),
+      }, { onConflict: 'address', ignoreDuplicates: false });
 
-  // Bust the cache so the leaderboard refreshes next open
-  _lbCache = null;
-  _lbCacheTime = 0;
-  return true;
+      if (ue) throw ue;
+
+      // Bust the cache so the leaderboard refreshes next open
+      _lbCache = null;
+      _lbCacheTime = 0;
+      return true;
+    } catch(e) {
+      lastError = e;
+      console.warn(`Leaderboard submit attempt ${attempt}/${maxRetries} failed:`, e.message);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+  }
+
+  console.warn('Leaderboard submit failed after all retries:', lastError.message);
+  return false;
 }
 
 // ── Fetch top 10 ──────────────────────────────────────────────
@@ -5628,18 +5739,34 @@ async function lbFetchTop10() {
   const now = Date.now();
   if (_lbCache && (now - _lbCacheTime) < LB_CACHE_TTL) return _lbCache;
 
-  try {
-    const { data, error } = await db
-      .from('lb_users')
-      .select('address, farmer_name, farm_name, score, prestige, level, level_title, updated_at')
-      .order('score', { ascending: false })
-      .limit(10);
+  const maxRetries = 3;
+  let lastError;
 
-    if (error) { console.warn('LB fetch error:', error.message); return null; }
-    _lbCache = data || [];
-    _lbCacheTime = now;
-    return _lbCache;
-  } catch(e) { return null; }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const { data, error } = await db
+        .from('lb_users')
+        .select('address, farmer_name, farm_name, score, prestige, level, level_title, updated_at')
+        .order('score', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      _lbCache = data || [];
+      _lbCacheTime = now;
+      return _lbCache;
+    } catch(e) {
+      lastError = e;
+      console.warn(`Leaderboard fetch attempt ${attempt}/${maxRetries} failed:`, e.message);
+      if (attempt < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+
+  console.warn('Leaderboard fetch failed after all retries:', lastError.message);
+  return _lbCache || null; // Return cached data if available, otherwise null
+  }
 }
 
 // ── Share Score button handler ────────────────────────────────
