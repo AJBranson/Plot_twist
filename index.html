@@ -3178,6 +3178,7 @@ function toggleFertiliseMode() {
 function applyFertiliser(idx) {
   const plot = G.plots[idx];
   if (!plot.unlocked) { notify('🔒 Unlock this plot first!', 'error'); return; }
+  if (G.compostCharges <= 0) { notify('🌿 No compost charges left!', 'error'); G.fertiliseMode = false; renderPlots(); renderCompost(); return; }
   if (plot.fertilised) { notify('🌿 Plot already fertilised!', 'error'); return; }
   if (plot.ready)      { notify('🌿 Harvest first — fertiliser applies before harvest!', 'error'); return; }
 
