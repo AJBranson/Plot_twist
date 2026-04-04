@@ -31,8 +31,11 @@
         </div>
       </div>
       <div class="stat-pill score">
-        <span class="icon">🏆</span>
-        <span class="val" id="stat-score">300</span>
+        <div class="score-main">
+          <span class="icon">🏆</span>
+          <span class="val" id="stat-score">300</span>
+        </div>
+        <div class="score-best" id="stat-score-best">Best 300</div>
       </div>
       <div class="prestige-pill" id="prestige-pill" style="display:none" onclick="doPrestige()" title="Click to Prestige at Level 10">
         <span id="prestige-stars"></span>
@@ -40,7 +43,8 @@
       </div>
     </div>
     <div class="bsv-pill" id="bsv-pill">
-      <span id="bsv-status">Wallet: Local Mode</span>
+      <span id="bsv-status">Guest Mode</span>
+      <span id="save-mode-status">Local save only</span>
       <button onclick="connectWallet()">Connect</button>
     </div>
     </div>
@@ -144,7 +148,7 @@
     <div class="event-desc"  id="confirm-desc"></div>
     <div class="event-btns">
       <button class="event-btn-primary"   id="confirm-ok">Confirm</button>
-      <button class="event-btn-secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="event-btn-secondary" id="confirm-cancel" onclick="closeConfirm()">Cancel</button>
     </div>
   </div>
 </div>

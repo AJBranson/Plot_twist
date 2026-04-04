@@ -86,6 +86,7 @@ button:active { transform: scale(0.95); }
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .game-title {
@@ -103,6 +104,7 @@ button:active { transform: scale(0.95); }
   gap: 12px;
   flex-wrap: wrap;
   flex: 1;
+  min-width: 0;
 }
 
 .stat-pill {
@@ -116,11 +118,82 @@ button:active { transform: scale(0.95); }
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .stat-pill .icon { font-size: 15px; }
 .stat-pill.coins .val { color: var(--gold); }
 .stat-pill.score .val { color: #7DD3FC; }
+.stat-pill.score {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 92px;
+}
+
+.stat-pill.score .score-main {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-pill.score .score-best {
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--text-dim);
+}
+
+.stat-pill.score.personal-best-hit {
+  animation: personal-best-pop 1.8s ease-out;
+  border-color: rgba(255, 209, 64, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 209, 64, 0.18), 0 0 20px rgba(255, 209, 64, 0.28), 0 0 34px rgba(125, 211, 252, 0.18);
+  background: linear-gradient(180deg, rgba(255, 209, 64, 0.16) 0%, rgba(125, 211, 252, 0.12) 100%);
+}
+
+.stat-pill.score.personal-best-hit .score-main {
+  animation: personal-best-bounce 0.65s ease-out;
+}
+
+.stat-pill.score.personal-best-hit .score-best {
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(255, 209, 64, 0.45);
+}
+
+.stat-pill.score.personal-best-hit .icon {
+  animation: personal-best-wiggle 0.75s ease-out;
+}
+
+@keyframes personal-best-pop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 209, 64, 0);
+  }
+  18% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 6px rgba(255, 209, 64, 0.16), 0 0 28px rgba(255, 209, 64, 0.35), 0 0 42px rgba(125, 211, 252, 0.22);
+  }
+  45% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 209, 64, 0), 0 0 0 rgba(255, 209, 64, 0), 0 0 0 rgba(125, 211, 252, 0);
+  }
+}
+
+@keyframes personal-best-bounce {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-2px) scale(1.08); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes personal-best-wiggle {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-12deg) scale(1.15); }
+  40% { transform: rotate(12deg) scale(1.2); }
+  60% { transform: rotate(-6deg) scale(1.12); }
+  100% { transform: rotate(0deg) scale(1); }
+}
 
 .level-pill {
   display: flex;
@@ -130,6 +203,8 @@ button:active { transform: scale(0.95); }
   border: 1px solid rgba(167,139,250,0.3);
   border-radius: 20px;
   padding: 5px 12px;
+  flex: 0 0 228px;
+  width: 228px;
 }
 
 .level-top {
@@ -151,7 +226,9 @@ button:active { transform: scale(0.95); }
 .xp-text { color: var(--xp-purple); font-size: 11px; }
 
 .xp-bar-outer {
-  width: 120px;
+  width: 100%;
+  min-width: 96px;
+  max-width: 160px;
   height: 5px;
   background: rgba(167,139,250,0.15);
   border-radius: 3px;
@@ -176,6 +253,23 @@ button:active { transform: scale(0.95); }
   font-size: 12px;
   color: var(--text-dim);
   margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+#bsv-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 800;
+}
+
+#save-mode-status {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
 }
 
 .bsv-pill button {
@@ -193,7 +287,7 @@ button:active { transform: scale(0.95); }
    ============================================================ */
 #main {
   display: grid;
-  grid-template-columns: 1fr 270px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
   gap: 0;
   flex: 1;
   min-height: 0;
@@ -209,8 +303,9 @@ button:active { transform: scale(0.95); }
    FARM AREA
    ============================================================ */
 #farm-area {
-  padding: 16px;
+  padding: clamp(12px, 2vw, 18px);
   overflow-y: auto;
+  min-width: 0;
 }
 
 #farm-heading {
@@ -220,6 +315,10 @@ button:active { transform: scale(0.95); }
   gap: 12px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+#farm-heading > * {
+  min-width: 0;
 }
 .farm-name-wrap, .farmer-name-wrap {
   display: flex;
@@ -275,7 +374,7 @@ button:active { transform: scale(0.95); }
 
 #plots-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 10px;
 }
 
@@ -455,6 +554,7 @@ button:active { transform: scale(0.95); }
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-wrap: wrap;
 }
 
 #watering-can-btn {
@@ -529,6 +629,7 @@ button:active { transform: scale(0.95); }
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-wrap: wrap;
 }
 
 #compost-btn {
@@ -682,6 +783,7 @@ button:active { transform: scale(0.95); }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 #shop-header {
@@ -708,9 +810,17 @@ button:active { transform: scale(0.95); }
   flex: 1;
   padding: 8px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 5px;
   align-content: start;
+}
+
+.shop-exotic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 6px;
+  margin-bottom: 4px;
+  grid-column: 1 / -1;
 }
 
 /* Scrollbar styling */
@@ -824,6 +934,7 @@ button:active { transform: scale(0.95); }
   flex-direction: column;
   gap: 8px;
   pointer-events: none;
+  width: min(320px, calc(100vw - 24px));
 }
 
 .notif {
@@ -836,7 +947,8 @@ button:active { transform: scale(0.95); }
   color: var(--text);
   animation: notif-in 0.3s ease forwards;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  max-width: 240px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .notif.harvest  { border-color: var(--green-hi); }
@@ -870,18 +982,310 @@ button:active { transform: scale(0.95); }
    MOBILE
    ============================================================ */
 @media (max-width: 768px) {
-  #main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; border-left: none; border-right: none; }
-  #shop-sidebar { border-left: none; border-top: 1px solid var(--border); max-height: 260px; }
-  #shop-crops-list { flex-direction: row; flex-wrap: wrap; }
-  .shop-level-divider { width: 100%; }
-  .crop-card { width: calc(50% - 6px); flex-shrink: 0; }
-  #plots-grid { grid-template-columns: repeat(3, 1fr); }
+  #header {
+    padding: 10px 12px;
+  }
+
+  .header-inner {
+    gap: 10px;
+  }
+
+  .game-title {
+    width: 100%;
+    text-align: center;
+    margin-right: 0;
+  }
+
+  .header-stats {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .level-pill {
+    flex: 0 1 220px;
+    width: 220px;
+    min-width: min(100%, 220px);
+  }
+
+  .bsv-pill {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  #main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    border-left: none;
+    border-right: none;
+  }
+
+  #farm-area {
+    overflow-y: visible;
+  }
+
+  #shop-sidebar {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: none;
+  }
+
+  #shop-crops-list {
+    max-height: none;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+
+  .shop-exotic-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+
+  #farm-heading {
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .farm-name-wrap,
+  .farmer-name-wrap {
+    width: 100%;
+  }
+
+  .journal-btn,
+  .lb-share-btn {
+    margin-left: 0;
+  }
+
+  #plots-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+
+  #watering-can-area,
+  #compost-area {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  #journal-modal {
+    max-height: 92vh;
+    max-width: min(100%, 720px);
+  }
+
+  #journal-header {
+    align-items: stretch;
+  }
+
+  #journal-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    order: 3;
+  }
+
+  .jtab {
+    min-width: 0;
+    text-align: center;
+    padding: 6px 8px;
+  }
+
+  .lb-my-score-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lb-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    display: grid;
+    align-items: center;
+  }
+
+  #merchant-banner {
+    width: min(100% - 20px, 520px);
+    padding: 12px 14px;
+    gap: 10px;
+  }
 }
 
 @media (max-width: 480px) {
-  #plots-grid { grid-template-columns: repeat(2, 1fr); }
-  .header-stats { gap: 6px; }
-  .xp-bar-outer { width: 80px; }
+  body::before {
+    height: 56px;
+  }
+
+  #game {
+    padding-top: 56px;
+  }
+
+  #header {
+    top: 0;
+    padding: 8px 10px;
+  }
+
+  .game-title {
+    font-size: 20px;
+  }
+
+  .header-stats {
+    gap: 6px;
+  }
+
+  .stat-pill,
+  .prestige-pill,
+  .journal-btn,
+  .lb-share-btn,
+  .bsv-pill {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .stat-pill.score {
+    align-items: center;
+  }
+
+  .level-pill {
+    width: 100%;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .level-top {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .xp-bar-outer {
+    max-width: none;
+  }
+
+  #farm-area {
+    padding: 10px;
+  }
+
+  .farm-name-text {
+    font-size: 16px;
+  }
+
+  .farmer-name-text {
+    font-size: 14px;
+  }
+
+  #plots-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .plot-footer {
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.25;
+    min-height: 34px;
+  }
+
+  #shop-crops-list,
+  .shop-exotic-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .crop-card.expanded .crop-card-main {
+    align-items: flex-start;
+  }
+
+  .crop-card-qty {
+    flex-wrap: wrap;
+  }
+
+  .qty-total {
+    order: 3;
+    flex-basis: 100%;
+    text-align: left;
+  }
+
+  #storage-grid {
+    gap: 6px;
+  }
+
+  .seed-tile-art,
+  .seed-tile-name {
+    width: 48px;
+  }
+
+  .seed-tile-art {
+    height: 48px;
+  }
+
+  #notif-container {
+    left: 12px;
+    right: 12px;
+    top: 64px;
+    width: auto;
+  }
+
+  #merchant-banner {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: 12px;
+  }
+
+  .merchant-btns {
+    flex-direction: row;
+    justify-content: stretch;
+  }
+
+  .merchant-btn-deal,
+  .merchant-btn-pass {
+    flex: 1 1 0;
+  }
+
+  #journal-overlay,
+  #event-overlay,
+  #confirm-overlay {
+    padding: 8px;
+  }
+
+  #journal-modal,
+  #event-card,
+  #confirm-card {
+    border-radius: 14px;
+  }
+
+  #journal-header {
+    padding: 12px 12px 8px;
+  }
+
+  #journal-title {
+    width: 100%;
+    text-align: center;
+  }
+
+  #journal-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #journal-body {
+    padding: 10px;
+  }
+
+  .lb-row {
+    gap: 8px;
+  }
+
+  .lb-name {
+    white-space: normal;
+  }
+
+  .lb-sub {
+    line-height: 1.35;
+  }
+}
+
+@media (max-width: 360px) {
+  #plots-grid,
+  #shop-crops-list,
+  .shop-exotic-grid,
+  #journal-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .merchant-btns {
+    flex-direction: column;
+  }
 }
 
 /* ============================================================

@@ -1,6 +1,6 @@
 // rendering.js - UI rendering functions
 
-import { G } from './game-state.js';
+import { G, getPersonalBestScore, getPersistenceSummary, syncPersonalBestScore } from './game-state.js';
 import { CROP_MAP, CROPS, EXOTIC_CROPS, LEVELS, PLOT_COSTS, COMPOST_MAX_CHARGES, MARKETPLACE_ENABLED } from './constants.js';
 import { CROP_THEME, cropArt, formatTime, formatBSV, getCurrentLevel, getLevelData, calcFarmScore,
          prestigeMultiplier, wateringCanCharge, compostNextChargeSecs, lockSVG, soilSVG, makeCropCardSVG,
@@ -11,6 +11,8 @@ import { renderLeaderboardTab, lbUpdateShareBtn } from './leaderboard.js';
 
 // Journal state
 let _currentJTab = 'crops';
+let _lastPersonalBestPulseToken = 0;
+let _personalBestPulseTimeout = null;
 
 // ============================================================
 // WATERING CAN
@@ -123,6 +125,8 @@ export function renderAll() {
 
 export function renderStats() {
   const ld = getCurrentLevel();
+  const score = calcFarmScore();
+  const personalBest = syncPersonalBestScore({ notifyOnChange: true, queueEffects: true });
   const xpInLevel = G.totalXP - ld.xpMin;
   const xpNeeded = ld.xpMax - ld.xpMin;
   const xpPct = Math.min((xpInLevel / xpNeeded) * 100, 100);
@@ -133,7 +137,25 @@ export function renderStats() {
   document.getElementById('stat-xp').textContent = G.totalXP;
   document.getElementById('stat-xp-max').textContent = ld.xpMax;
   document.getElementById('xp-fill').style.width = xpPct + '%';
-  document.getElementById('stat-score').textContent = calcFarmScore();
+  document.getElementById('stat-score').textContent = score.toLocaleString();
+  const scorePill = document.querySelector('.stat-pill.score');
+  const scoreBest = document.getElementById('stat-score-best');
+  if (scoreBest) {
+    scoreBest.textContent = 'Best ' + getPersonalBestScore().toLocaleString();
+    scoreBest.title = personalBest > score ? 'All-time personal best Farm Score' : 'Current score matches your personal best';
+  }
+  const pulseToken = G._personalBestPulseToken || 0;
+  if (scorePill && pulseToken > _lastPersonalBestPulseToken) {
+    _lastPersonalBestPulseToken = pulseToken;
+    scorePill.classList.remove('personal-best-hit');
+    void scorePill.offsetWidth;
+    scorePill.classList.add('personal-best-hit');
+    if (_personalBestPulseTimeout) clearTimeout(_personalBestPulseTimeout);
+    _personalBestPulseTimeout = setTimeout(() => {
+      scorePill.classList.remove('personal-best-hit');
+      _personalBestPulseTimeout = null;
+    }, 1800);
+  }
 
   const pp = document.getElementById('prestige-pill');
   if (pp) {
@@ -154,9 +176,11 @@ export function renderStats() {
   }
 
   const bsvStatus = document.getElementById('bsv-status');
+  const saveModeStatus = document.getElementById('save-mode-status');
   const bsvBtn = document.querySelector('#bsv-pill button');
   if (G.walletConnected) {
     if (bsvStatus) bsvStatus.textContent = '₿ ' + G.walletAddress.substring(0,10) + '…';
+    if (saveModeStatus) saveModeStatus.textContent = getPersistenceSummary();
     if (bsvBtn) {
       bsvBtn.textContent = 'Connected ✓';
       bsvBtn.style.background = 'var(--green-hi)';
@@ -166,7 +190,8 @@ export function renderStats() {
       bsvBtn.onclick = () => window.disconnectWallet && window.disconnectWallet();
     }
   } else {
-    if (bsvStatus) bsvStatus.textContent = 'Wallet: Local Mode';
+    if (bsvStatus) bsvStatus.textContent = 'Guest Mode';
+    if (saveModeStatus) saveModeStatus.textContent = getPersistenceSummary();
     if (bsvBtn) {
       bsvBtn.textContent = 'Connect';
       bsvBtn.style.background = '';
@@ -267,7 +292,7 @@ export function renderPlots() {
             </div>
             <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
               <circle class="progress-ring-bg" cx="50" cy="50" r="${r2}" stroke-width="5"/>
-              <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" stroke="${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="0"/>
+              <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" style="stroke:${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="0"/>
             </svg>
           </div>
           <div class="plot-footer" style="color:#FFD700;font-weight:800;font-size:11px">🌱 Tap to collect seeds</div>
@@ -282,7 +307,7 @@ export function renderPlots() {
           </div>
           <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <circle class="progress-ring-bg" cx="50" cy="50" r="${r2}" stroke-width="5"/>
-            <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" stroke="${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="${offset2.toFixed(2)}"/>
+            <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" style="stroke:${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="${offset2.toFixed(2)}"/>
           </svg>
           ${atRisk?'<span style="position:absolute;top:4px;right:4px;font-size:11px">⚠️</span>':''}
         </div>
@@ -337,7 +362,7 @@ export function renderPlotsOnly() {
 
       const ringFill = tile.querySelector('.progress-ring-fill');
       if (ringFill) {
-        ringFill.setAttribute('stroke', ringColour);
+        ringFill.style.stroke = ringColour;
         ringFill.setAttribute('stroke-dashoffset', offset2.toFixed(2));
       }
 
@@ -380,7 +405,7 @@ export function renderPlotsOnly() {
     if (ringFill) {
       const r = 44, circ = 2*Math.PI*r;
       const ringColor = progress < 0.35 ? '#F59E0B' : progress < 0.70 ? '#84CC16' : '#6FCF3A';
-      ringFill.setAttribute('stroke', ringColor);
+      ringFill.style.stroke = ringColor;
       ringFill.setAttribute('stroke-dashoffset', (circ*(1-progress)).toFixed(2));
     }
     const footer = tile.querySelector('.plot-footer');
@@ -508,7 +533,7 @@ export function renderShop() {
       </div>`;
     }).filter(Boolean).join('');
     exoticHtml = `<div class="shop-level-divider" style="background:linear-gradient(90deg,rgba(255,215,0,0.12),rgba(255,215,0,0.04));border-color:rgba(255,215,0,0.3);color:#FFD700">✨ Exotic Seeds</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;grid-column:1/-1">${exoticCards}</div>`;
+      <div class="shop-exotic-grid">${exoticCards}</div>`;
   }
   list.innerHTML = regularHtml + exoticHtml;
 }
@@ -682,6 +707,12 @@ export function renderTipsTab() {
   html += '<div style="font-size:12px;color:#D7E9B9;line-height:1.6;">Try to keep at least a small stash of coins, you never know when an unexpected event might occur.</div>';
   html += '</div>';
 
+  html += '<div style="margin-bottom:6px">';
+  html += '<div style="font-size:14px;font-weight:700;color:#DC143C;margin-bottom:8px">Guest or Wallet Account game saves</div>';
+  html += '<div style="font-size:12px;color:#D7E9B9;line-height:1.6;">Playing without connecting your wallet, you are playing as a Guest account and the game is only saved in local storage only.</div>';
+  html += '<div style="font-size:12px;color:#D7E9B9;line-height:1.6;">Playing and connecting your wallet, you will be playing with a Wallet account and your game is saved on a cloud database and accessible from any device using this wallet account.</div>';
+  html += '<div style="font-size:12px;color:#D7E9B9;line-height:1.6;">Remember, the Guest and Wallet accounts are separate profiles and hence different games.</div>';
+  html += '</div>';
   panel.innerHTML = html;
 }
 
@@ -689,10 +720,34 @@ export function renderTipsTab() {
 export function showConfirm(title, desc, onOk) {
   document.getElementById('confirm-title').textContent = title;
   document.getElementById('confirm-desc').textContent  = desc;
+  document.getElementById('confirm-ok').textContent = 'Confirm';
+  document.getElementById('confirm-cancel').textContent = 'Cancel';
   document.getElementById('confirm-ok').onclick = () => { closeConfirm(); onOk(); };
+  document.getElementById('confirm-cancel').onclick = () => closeConfirm();
   document.getElementById('confirm-overlay').classList.remove('hidden');
 }
 
+export function showSaveConflictChoice(title, desc, primaryLabel, secondaryLabel) {
+  return new Promise((resolve) => {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-desc').textContent  = desc;
+    document.getElementById('confirm-ok').textContent = primaryLabel;
+    document.getElementById('confirm-cancel').textContent = secondaryLabel;
+    document.getElementById('confirm-ok').onclick = () => {
+      closeConfirm();
+      resolve('cloud');
+    };
+    document.getElementById('confirm-cancel').onclick = () => {
+      closeConfirm();
+      resolve('local');
+    };
+    document.getElementById('confirm-overlay').classList.remove('hidden');
+  });
+}
+
 export function closeConfirm() {
+  document.getElementById('confirm-ok').textContent = 'Confirm';
+  document.getElementById('confirm-cancel').textContent = 'Cancel';
+  document.getElementById('confirm-cancel').onclick = () => closeConfirm();
   document.getElementById('confirm-overlay').classList.add('hidden');
 }

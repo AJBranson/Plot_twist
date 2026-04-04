@@ -2,33 +2,45 @@
 // WALLET INTEGRATION
 // ============================================================
 
-import { G, saveGame } from './game-state.js';
+import { G, saveGame, switchToGuestProfile, switchToWalletProfile } from './game-state.js';
 
 // Uses window.notify and window.renderAll set up by main.js
 // to avoid circular dependency with rendering.js
 
 let _walletListenerRegistered = false;
+let _walletBroadcastAuth = {
+  address: null,
+  publicKeyHex: null,
+  genericUseSeed: null,
+};
 
 function notifyWallet(message, type = 'info') {
   if (window.notify) window.notify(message, type);
   else console.log('[wallet]', message);
 }
 
-function updateWalletState(connected, address = null, notifyMessage = null, notifyType = 'info') {
+async function updateWalletState(connected, address = null, notifyMessage = null, notifyType = 'info') {
   if (!G) {
     console.warn('Wallet state update attempted before game state was initialized.');
     return;
   }
 
-  G.walletConnected = connected;
-  G.walletAddress = address;
-  saveGame();
+  if (connected && address) {
+    await switchToWalletProfile(address);
+  } else {
+    switchToGuestProfile();
+    saveGame();
+  }
   if (window.renderAll) window.renderAll();
   if (notifyMessage) notifyWallet(notifyMessage, notifyType);
 }
 
 export function isWalletAvailable() {
   return !!(window.platformSDK && typeof window.platformSDK.sendCommand === 'function' && typeof window.platformSDK.onCommand === 'function');
+}
+
+export function getWalletBroadcastAuth() {
+  return { ..._walletBroadcastAuth };
 }
 
 function handleConnectionResponse(data) {
@@ -38,16 +50,23 @@ function handleConnectionResponse(data) {
   const wallet = payload.wallet;
 
   if (payload.error) {
+    _walletBroadcastAuth = { address: null, publicKeyHex: null, genericUseSeed: null };
     updateWalletState(false, null, `⚠️ Wallet connection failed: ${payload.error}`, 'error');
     return;
   }
 
   if (wallet && !payload.anonymous) {
-    updateWalletState(true, wallet.address, '✅ Wallet connected!', 'unlock');
+    _walletBroadcastAuth = {
+      address: wallet.address || null,
+      publicKeyHex: wallet.publicKeyHex || null,
+      genericUseSeed: payload.genericUseSeed || null,
+    };
+    updateWalletState(true, wallet.address, '✅ Wallet connected! Cloud save enabled for this wallet.', 'unlock');
     return;
   }
 
-  updateWalletState(false, null, '👤 Running anonymously — coins only mode.', 'warning');
+  _walletBroadcastAuth = { address: null, publicKeyHex: null, genericUseSeed: null };
+  updateWalletState(false, null, '👤 Running in guest mode — progress stays on this device until you connect a wallet.', 'warning');
 }
 
 export function connectWallet() {
@@ -92,9 +111,6 @@ export function disconnectWallet() {
     return;
   }
 
-  G.walletConnected = false;
-  G.walletAddress = null;
-  saveGame();
-  if (window.renderAll) window.renderAll();
-  notifyWallet('🔌 Wallet disconnected.', 'info');
+  _walletBroadcastAuth = { address: null, publicKeyHex: null, genericUseSeed: null };
+  updateWalletState(false, null, '🔌 Wallet disconnected. Guest farm restored on this device.', 'info');
 }
