@@ -1,10 +1,10 @@
 // rendering.js - UI rendering functions
 
 import { G, getPersonalBestScore, getPersistenceSummary, syncPersonalBestScore } from './game-state.js';
-import { CROP_MAP, CROPS, EXOTIC_CROPS, LEVELS, PLOT_COSTS, COMPOST_MAX_CHARGES, MARKETPLACE_ENABLED } from './constants.js';
-import { CROP_THEME, cropArt, formatTime, formatBSV, getCurrentLevel, getLevelData, calcFarmScore,
-         prestigeMultiplier, wateringCanCharge, compostNextChargeSecs, lockSVG, soilSVG, makeCropCardSVG,
-         progressRingSVG, isCropUnlocked, WATERING_CAN_CHARGE_SECS } from './utils.js';
+import { CROP_MAP, CROPS, EXOTIC_CROPS, LEVELS, PLOT_COSTS, COMPOST_MAX_CHARGES, MARKETPLACE_ENABLED, MISHAP_INSURANCE_COST, MISHAP_INSURANCE_SECS } from './constants.js';
+import { CROP_THEME, cropArt, cropArtWithPrestige, formatTime, formatBSV, formatUSD, coinsToUSD, seedsToUSD, USD_COMPOST_REFILL, USD_SPEED_BOOST, getCurrentLevel, getLevelData, calcFarmScore,
+         prestigeMultiplier, wateringCanCharge, compostNextChargeSecs, lockSVG, lockSVGWithPrestige, soilSVG, soilSVGWithPrestige, makeCropCardSVG,
+         progressRingSVG, isCropUnlocked, WATERING_CAN_CHARGE_SECS, getPrestigeTier } from './utils.js';
 import { ALL_ACHIEVEMENTS, CROP_MILESTONES, _pendingNewAchievements, clearPendingAchievements } from './achievements.js';
 import { renderVegeStand, renderMarketTab, renderMarketFilterBar, renderMarketSortBar, renderMarketListings } from './marketplace.js';
 import { renderLeaderboardTab, lbUpdateShareBtn } from './leaderboard.js';
@@ -69,6 +69,7 @@ export function renderCompost() {
   const btn = document.getElementById('compost-btn');
   const status = document.getElementById('compost-status');
   const pips = document.getElementById('compost-pips');
+  const buyBtn = document.getElementById('compost-buy-btn');
   if (!btn || !status || !pips) return;
 
   btn.innerHTML = compostPileSVG(G.compostCharges);
@@ -91,6 +92,13 @@ export function renderCompost() {
     status.textContent = '⏳ Recharging… ' + formatTime(compostNextChargeSecs());
     status.style.color = 'var(--text-dim)';
   }
+
+  if (buyBtn) {
+    const shouldShow = !hasCharges && G.walletConnected === true;
+    buyBtn.style.display = shouldShow ? 'inline-block' : 'none';
+    buyBtn.textContent = formatUSD(USD_COMPOST_REFILL);
+    buyBtn.title = 'Buy compost refill for ' + formatUSD(USD_COMPOST_REFILL) + ' USD';
+  }
 }
 
 function compostPileSVG(charges) {
@@ -108,8 +116,138 @@ function compostPileSVG(charges) {
 }
 
 // ============================================================
+// MISHAP INSURANCE
+// ============================================================
+export function renderMishapInsurance() {
+  if (!G) return;
+  const btn = document.getElementById('insurance-btn');
+  const status = document.getElementById('insurance-status');
+  if (!btn || !status) return;
+
+  btn.innerHTML = insuranceSVG();
+
+  const remaining = G._mishapInsuranceExpiry > 0 ? Math.max(0, (G._mishapInsuranceExpiry - Date.now()) / 1000) : 0;
+  const isActive = remaining > 0;
+  const hasSeeding = G.plots.some(p => p.seeding);
+
+  if (isActive) {
+    btn.disabled = true;
+    btn.title = '🛡️ Insured — ' + formatTime(Math.ceil(remaining)) + ' remaining';
+    status.textContent = '🛡️ Active — ' + formatTime(Math.ceil(remaining)) + ' remaining';
+    status.style.color = 'var(--green-hi)';
+  } else if (!hasSeeding) {
+    btn.disabled = true;
+    btn.title = 'No seeding plots to insure';
+    status.textContent = 'Plant an exotic crop and let it go to seed first';
+    status.style.color = 'var(--text-dim)';
+  } else {
+    const canAfford = G.coins >= MISHAP_INSURANCE_COST;
+    btn.disabled = !canAfford;
+    btn.title = canAfford ? 'Buy Mishap Insurance (🪙' + MISHAP_INSURANCE_COST + ')' : 'Not enough coins';
+    status.textContent = 'Not insured — 🪙' + MISHAP_INSURANCE_COST;
+    status.style.color = canAfford ? 'var(--text)' : 'var(--text-dim)';
+  }
+}
+
+// ============================================================
+// SPEED BOOST
+// ============================================================
+export function renderSpeedBoost() {
+  if (!G) return;
+  const btn = document.getElementById('speed-boost-btn');
+  if (!btn) return;
+
+  const isActive = G._speedBoostExpiry > Date.now();
+  const isConnected = G.walletConnected === true;
+
+  btn.style.display = isConnected ? 'inline-flex' : 'none';
+
+  if (isActive) {
+    const remaining = Math.max(0, Math.ceil((G._speedBoostExpiry - Date.now()) / 1000));
+    btn.disabled = true;
+    btn.title = '⚡ Speed Boost active — ' + formatTime(remaining) + ' remaining';
+    btn.style.color = '#FFD140';
+    btn.style.borderColor = 'rgba(255,209,64,0.6)';
+    btn.style.background = 'rgba(255,209,64,0.15)';
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span style="font-size:8px;font-weight:800">⚡${formatTime(remaining)}</span>`;
+  } else {
+    btn.disabled = false;
+    btn.title = 'Speed Boost — 10× for 20 minutes (' + formatUSD(USD_SPEED_BOOST) + ' USD)';
+    btn.style.color = '#A78BFA';
+    btn.style.borderColor = 'rgba(167,139,250,0.4)';
+    btn.style.background = 'rgba(167,139,250,0.1)';
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span style="font-size:9px;font-weight:800">⚡</span>`;
+  }
+}
+
+function insuranceSVG() {
+  return `<svg width="56" height="56" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <path d="M28 8 L14 16 L14 30 Q14 44 28 50 Q42 44 42 30 L42 16 Z" fill="#455A64" stroke="#37474F" stroke-width="1.5"/>
+    <path d="M28 12 L18 18 L18 30 Q18 40 28 46 Q38 40 38 30 L38 18 Z" fill="#546E7A"/>
+    <path d="M24 28 L27 31 L33 24" fill="none" stroke="#6FCF3A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+// ============================================================
 // MAIN RENDER FUNCTIONS
 // ============================================================
+function embeddedCropEmoji(cropId) {
+  const emojiMap = {
+    radish: '🌱',
+    lettuce: '🥬',
+    spinach: '🥬',
+    zucchini: '🥒',
+    beans: '🫛',
+    peas: '🫛',
+    cucumber: '🥒',
+    beetroot: '🌱',
+    carrot: '🥕',
+    cabbage: '🥬',
+    tomato: '🍅',
+    corn: '🌽',
+    broccoli: '🥦',
+    capsicum: '🌶️',
+    cauliflower: '🥦',
+    sunflower: '🌻',
+    onion: '🧅',
+    potato: '🥔',
+    pumpkin: '🎃',
+    garlic: '🧄',
+    dragonfruit: '🐉',
+    saffron: '🌸',
+    vanilla: '🌼',
+    truffle: '🍄',
+  };
+  return emojiMap[cropId] || '🌿';
+}
+
+function renderEmbeddedCropBadge(cropId, { isExotic = false, simple = false } = {}) {
+  const crop = CROP_MAP[cropId];
+  const theme = CROP_THEME[cropId] || { bg: '#223020', border: 'rgba(255,255,255,0.25)' };
+  const label = crop ? crop.name : cropId;
+  const classes = [
+    'plot-crop-badge',
+    simple ? 'simple' : '',
+    isExotic ? 'exotic' : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="${classes}" style="--crop-bg:${theme.bg};--crop-border:${theme.border};" aria-label="${label}" title="${label}">
+    <span class="plot-crop-badge__leaf plot-crop-badge__leaf--left"></span>
+    <span class="plot-crop-badge__leaf plot-crop-badge__leaf--right"></span>
+    <span class="plot-crop-badge__emoji">${embeddedCropEmoji(cropId)}</span>
+  </div>`;
+}
+
+function renderPlotCropMedia(cropId, prestige, { isExotic = false, simple = false, imgClass = 'plot-crop-img' } = {}) {
+  const isEmbedded = !!window.PLOT_TWIST_EMBEDDED;
+  const svgMarkup = isExotic || simple
+    ? `<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(cropId)}</svg>`
+    : cropArtWithPrestige(cropId, prestige);
+
+  if (!isEmbedded) return svgMarkup;
+
+  return renderEmbeddedCropBadge(cropId, { isExotic, simple, imgClass });
+}
+
 export function renderAll() {
   if (!G) return;
   renderStats();
@@ -119,6 +257,8 @@ export function renderAll() {
   renderShop();
   renderWateringCan();
   renderCompost();
+  renderMishapInsurance();
+  renderSpeedBoost();
   if (MARKETPLACE_ENABLED) renderVegeStand();
   lbUpdateShareBtn();
 }
@@ -206,24 +346,25 @@ export function renderPlots() {
   const grid = document.getElementById('plots-grid');
   if (!grid) return;
   const now = Date.now();
+  const boostActive = G._speedBoostExpiry > now;
 
   grid.innerHTML = G.plots.map((plot, idx) => {
     const cost = PLOT_COSTS[idx];
+    const bc = boostActive && plot.unlocked ? ' speed-boost-active' : '';
+    const bb = boostActive && plot.unlocked ? '<div class="speed-boost-badge">⚡</div>' : '';
 
     if (!plot.unlocked) {
       const canAfford = G.coins >= cost;
       const canUnlock = idx === 0 || G.plots[idx-1].harvestedCount >= 1;
-      const bsvCost = formatBSV(cost);
       return `<div class="plot-tile locked" data-idx="${idx}">
         <div class="plot-visual" style="background:#131310;border:2px solid rgba(255,255,255,0.05)">
-          <div class="plot-overlay" style="flex-direction:column;gap:4px">${lockSVG()}</div>
+          <div class="plot-overlay" style="flex-direction:column;gap:4px">${lockSVGWithPrestige(G.prestige)}</div>
           <div class="plot-label" style="color:${canAfford?'#FFD140':'#888'}">🪙 ${cost}</div>
         </div>
         <div class="plot-footer" style="display:flex;flex-direction:column;gap:3px;padding:5px 6px">
           <span style="font-size:9px;color:var(--text-dim);text-align:center">${!canUnlock?'⚠️ harvest first':'Plot '+(idx+1)}</span>
           ${canUnlock?`<div style="display:flex;gap:4px">
             <button onclick="tryUnlockPlot(${idx})" style="flex:1;background:${canAfford?'rgba(255,209,64,0.15)':'rgba(100,100,100,0.15)'};border:1px solid ${canAfford?'rgba(255,209,64,0.4)':'rgba(100,100,100,0.3)'};border-radius:6px;padding:3px 4px;font-size:9px;font-weight:800;color:${canAfford?'#FFD140':'#888'};cursor:${canAfford?'pointer':'not-allowed'}" ${canAfford?'':'disabled'}>🪙 ${cost}</button>
-            <button onclick="unlockPlotBSV(${idx})" style="flex:1;background:${G.walletConnected?'rgba(200,134,10,0.2)':'rgba(100,100,100,0.1)'};border:1px solid ${G.walletConnected?'rgba(200,134,10,0.5)':'rgba(100,100,100,0.2)'};border-radius:6px;padding:3px 4px;font-size:9px;font-weight:800;color:${G.walletConnected?'#F5A623':'#666'};cursor:${G.walletConnected?'pointer':'not-allowed'}" ${G.walletConnected?'':'disabled'}>₿ ${bsvCost}</button>
           </div>`:''}
         </div>
       </div>`;
@@ -237,11 +378,12 @@ export function renderPlots() {
         : isFertTarget ? `<span style="font-size:22px">🌿</span>`
         : `<span class="plus-sign">+</span>`;
       const clickHandler = G.fertiliseMode ? `applyFertiliser(${idx})` : `tryPlant(${idx})`;
-      return `<div class="plot-tile empty ${isTarget?'plant-target':''} ${isFertTarget?'fertilise-target':''}" data-idx="${idx}" onclick="${clickHandler}">
+      return `<div class="plot-tile empty ${isTarget?'plant-target':''} ${isFertTarget?'fertilise-target':''}${bc}" data-idx="${idx}" onclick="${clickHandler}">
         <div class="plot-visual">
-          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+          <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
           <div class="plot-overlay">${overlayContent}</div>
           ${plot.fertilised?'<div class="plot-fertilised-badge">🌿 +25%</div>':''}
+          ${bb}
         </div>
         <div class="plot-footer">Plot ${idx+1} — ${isFertTarget?'Tap to fertilise':isTarget?'Tap to plant':'Empty'}</div>
       </div>`;
@@ -251,26 +393,33 @@ export function renderPlots() {
 
     if (plot.ready) {
       const displayPrice = Math.floor(crop.sellPrice * prestigeMultiplier() * (plot.fertilised?1.25:1));
+      const cropSvg = renderPlotCropMedia(plot.cropId, G.prestige, { imgClass: 'ready-crop-img' });
       if (crop.exotic) {
-        return `<div class="plot-tile ready exotic-ready" data-idx="${idx}" onclick="showHarvestFork(${idx})">
+        return `<div class="plot-tile ready exotic-ready${bc}" data-idx="${idx}" onclick="showHarvestFork(${idx})">
           <div class="plot-visual">
-            <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
-            <div class="plot-overlay" style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">
-              <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 6px rgba(255,215,0,0.5))">${cropArt(plot.cropId)}</svg>
+            <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
+            <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;overflow:hidden">
+              <div class="crop-art ready-crop-art exotic-crop-art" style="transform:scale(0.82) translateY(-6px);opacity:1;transform-origin:center center">
+                ${renderPlotCropMedia(plot.cropId, G.prestige, { isExotic: true, imgClass: 'ready-crop-img exotic-ready-crop-img' })}
+              </div>
             </div>
             <div style="position:absolute;top:4px;right:4px;font-size:11px">✨</div>
             ${plot.fertilised?'<div class="plot-fertilised-badge">🌿 +25%</div>':''}
+            ${bb}
           </div>
           <div class="plot-footer"><span style="color:#FFD700;font-weight:800;font-size:11px">✨ Harvest or Seed?</span></div>
         </div>`;
       }
-      return `<div class="plot-tile ready" data-idx="${idx}" onclick="harvestCrop(${idx})">
+      return `<div class="plot-tile ready${bc}" data-idx="${idx}" onclick="harvestCrop(${idx})">
         <div class="plot-visual">
-          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
-          <div class="plot-overlay" style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">
-            <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(plot.cropId)}</svg>
+          <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
+          <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;overflow:hidden">
+            <div class="crop-art ready-crop-art" style="transform:scale(0.82) translateY(-6px);opacity:1;transform-origin:center center">
+              ${cropSvg}
+            </div>
           </div>
           ${plot.fertilised?'<div class="plot-fertilised-badge">🌿 +25%</div>':''}
+          ${bb}
         </div>
         <div class="plot-footer"><span class="footer-harvest">✨ Harvest! +🪙${displayPrice}</span></div>
       </div>`;
@@ -283,9 +432,9 @@ export function renderPlots() {
       const r2 = 44, circ2 = 2*Math.PI*r2, offset2 = circ2*(1-elapsedFrac);
       const ringColour = plot.seedReady ? '#FFD700' : atRisk ? '#FF8C00' : '#A78BFA';
       if (plot.seedReady) {
-        return `<div class="plot-tile seeding seed-ready" data-idx="${idx}" onclick="collectSeeds(${idx})">
+        return `<div class="plot-tile seeding seed-ready${bc}" data-idx="${idx}" onclick="collectSeeds(${idx})">
           <div class="plot-visual">
-            <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+            <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
             <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
               <div style="font-size:28px;filter:drop-shadow(0 0 6px gold)">🌱</div>
               <div style="font-size:9px;color:#FFD700;font-weight:800">Seeds Ready!</div>
@@ -294,15 +443,16 @@ export function renderPlots() {
               <circle class="progress-ring-bg" cx="50" cy="50" r="${r2}" stroke-width="5"/>
               <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" style="stroke:${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="0"/>
             </svg>
+            ${bb}
           </div>
           <div class="plot-footer" style="color:#FFD700;font-weight:800;font-size:11px">🌱 Tap to collect seeds</div>
         </div>`;
       }
-      return `<div class="plot-tile seeding" data-idx="${idx}">
+      return `<div class="plot-tile seeding${bc}" data-idx="${idx}">
         <div class="plot-visual">
-          <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+          <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
           <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px">
-            <div style="opacity:0.5;transform:scale(0.7) translateY(4px)"><svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="filter:grayscale(60%)">${cropArt(plot.cropId)}</svg></div>
+            <div style="opacity:0.5;transform:scale(0.7) translateY(4px)">${renderPlotCropMedia(plot.cropId, G.prestige, { simple: true, imgClass: 'plot-crop-img seeding-crop-img' })}</div>
             <div style="font-size:9px;color:${atRisk?'#FF8C00':'#A78BFA'};font-weight:700">${atRisk?'⚠️ At risk':'🌱 Seeding…'}</div>
           </div>
           <svg class="progress-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -310,6 +460,7 @@ export function renderPlots() {
             <circle class="progress-ring-fill" cx="50" cy="50" r="${r2}" stroke-width="5" style="stroke:${ringColour}" stroke-dasharray="${circ2.toFixed(2)}" stroke-dashoffset="${offset2.toFixed(2)}"/>
           </svg>
           ${atRisk?'<span style="position:absolute;top:4px;right:4px;font-size:11px">⚠️</span>':''}
+          ${bb}
         </div>
         <div class="plot-footer" style="font-size:10px;color:${atRisk?'#FF8C00':'var(--text-dim)'}">${atRisk?`Seeding ⚠️ ${formatTime(remaining2)}`:`Going to seed… ${formatTime(remaining2)}`}</div>
       </div>`;
@@ -324,16 +475,18 @@ export function renderPlots() {
     const r = 44, circ = 2*Math.PI*r, offset = circ*(1-progress);
     const isFertTarget = G.fertiliseMode && !plot.fertilised;
     const clickHandler2 = G.fertiliseMode ? `applyFertiliser(${idx})` : '';
-    return `<div class="plot-tile growing ${isFertTarget?'fertilise-target':''}" data-idx="${idx}" ${clickHandler2?`onclick="${clickHandler2}"`:''}>
+    const growingCropSvg = renderPlotCropMedia(plot.cropId, G.prestige, { imgClass: 'plot-crop-img growing-crop-img' });
+    return `<div class="plot-tile growing ${isFertTarget?'fertilise-target':''}${bc}" data-idx="${idx}" ${clickHandler2?`onclick="${clickHandler2}"`:''}>
       <div class="plot-visual">
-        <div class="plot-soil-bg">${soilSVG('100%','100%')}</div>
+        <div class="plot-soil-bg">${soilSVGWithPrestige('100%','100%',G.prestige)}</div>
         <div class="plot-overlay" style="display:flex;align-items:center;justify-content:center;overflow:hidden">
           <div class="crop-art" style="transform:scale(${scale.toFixed(3)}) translateY(${(-(scale*8)).toFixed(1)}px);opacity:${opacity.toFixed(3)};transform-origin:center center">
-            <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(plot.cropId)}</svg>
+            ${growingCropSvg}
           </div>
         </div>
         ${progressRingSVG(progress)}
         ${plot.fertilised?'<div class="plot-fertilised-badge">🌿 +25%</div>':''}
+        ${bb}
       </div>
       <div class="plot-footer">${isFertTarget?'🌿 Tap to fertilise':`${crop.name} — ${formatTime(remaining)}`}</div>
     </div>`;
@@ -344,9 +497,18 @@ export function renderPlotsOnly() {
   const grid = document.getElementById('plots-grid');
   if (!grid) return;
   const now = Date.now();
+  const boostActive = G._speedBoostExpiry > Date.now();
+
   G.plots.forEach((plot, idx) => {
     const tile = grid.querySelector(`[data-idx="${idx}"]`);
-    if (!tile || !plot.cropId || plot.ready || !plot.plantedAt) return;
+    if (!tile) return;
+    tile.classList.toggle('speed-boost-active', boostActive && plot.unlocked);
+
+    if (plot.ready) {
+      return;
+    }
+
+    if (!plot.cropId || !plot.plantedAt) return;
     const crop = CROP_MAP[plot.cropId];
 
     tile.classList.toggle('seeding', plot.seeding);
@@ -380,7 +542,7 @@ export function renderPlotsOnly() {
       if (overlay) {
         overlay.innerHTML = plot.seedReady
           ? `<div style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px"><div style="font-size:28px;filter:drop-shadow(0 0 6px gold)">🌱</div><div style="font-size:9px;color:#FFD700;font-weight:800">Seeds Ready!</div></div>`
-          : `<div style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px"><div style="opacity:0.5;transform:scale(0.7) translateY(4px)"><svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="filter:grayscale(60%)">${cropArt(plot.cropId)}</svg></div><div style="font-size:9px;color:${atRisk?'#FF8C00':'#A78BFA'};font-weight:700">${atRisk?'⚠️ At risk':'🌱 Seeding…'}</div></div>`;
+          : `<div style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px"><div style="opacity:0.5;transform:scale(0.7) translateY(4px)">${renderPlotCropMedia(plot.cropId, G.prestige, { simple: true, imgClass: 'plot-crop-img seeding-crop-img' })}</div><div style="font-size:9px;color:${atRisk?'#FF8C00':'#A78BFA'};font-weight:700">${atRisk?'⚠️ At risk':'🌱 Seeding…'}</div></div>`;
       }
 
       if (plot.seedReady) {
@@ -444,7 +606,7 @@ export function renderStorage() {
     return `<div class="seed-tile${selected?' selected':''}" onclick="selectFromStorage('${cropId}')" title="${crop.name}: ${displayQty} seed${displayQty!==1?'s':''}">
       <div class="seed-tile-art" style="${tileStyle};position:relative">
         ${topBadge}
-        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArt(baseCropId)}</svg>
+        <svg width="52" height="52" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">${cropArtWithPrestige(baseCropId, G.prestige)}</svg>
         <span class="seed-tile-count">${displayQty}</span>
       </div>
       <div class="seed-tile-name" style="${nameStyle}">${isHeritage?crop.name+' ✨':crop.name}</div>
@@ -479,7 +641,7 @@ export function renderShop() {
       const theme = CROP_THEME[crop.id] || { bg:'#1A1A1A', border:'rgba(255,255,255,0.2)' };
       const inStock = G.inventory[crop.id] || 0;
       let classes = 'crop-card' + (expanded?' expanded':'') + (!unlocked?' locked-crop':'');
-      const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px">${cropArt(crop.id)}</svg>`;
+      const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px">${cropArtWithPrestige(crop.id, G.prestige)}</svg>`;
       const stockBadge = inStock>0 ? `<span style="font-size:9px;background:rgba(111,207,58,0.2);color:var(--green-hi);border-radius:6px;padding:1px 4px;margin-left:3px;font-weight:800">×${inStock}</span>` : '';
       const lockBadge = !unlocked ? `<span class="crop-lock-badge">Lv${crop.unlockLevel}</span>` : '';
       const mainRow = `<div class="crop-card-main" style="display:flex;align-items:center;gap:7px">
@@ -502,7 +664,7 @@ export function renderShop() {
           <button class="buy-btn" id="buy-btn-${crop.id}" onclick="event.stopPropagation();buySeeds('${crop.id}',parseInt(document.getElementById('qty-val-${crop.id}').textContent))" ${G.coins>=crop.seedCost?'':'disabled'}>Buy</button>
         </div>
         <div style="display:flex;justify-content:flex-end;padding:4px 0 2px;border-top:1px solid rgba(255,209,64,0.15);margin-top:4px">
-          <button class="bsv-buy-btn" id="bsv-btn-${crop.id}" onclick="event.stopPropagation();buySeedsBSV('${crop.id}',parseInt(document.getElementById('qty-val-${crop.id}').textContent))" ${G.walletConnected?'':'disabled'} title="${G.walletConnected?'Pay with BSV':'Connect wallet to pay with BSV'}">₿ <span id="qty-bsv-${crop.id}">${formatBSV(totalCoins)}</span></button>
+          <button class="bsv-buy-btn" id="bsv-btn-${crop.id}" onclick="event.stopPropagation();buySeedsBSV('${crop.id}',parseInt(document.getElementById('qty-val-${crop.id}').textContent))" ${G.walletConnected?'':'disabled'} title="${G.walletConnected?'Pay in USD via wallet':'Connect wallet to pay'}"><span id="qty-bsv-${crop.id}">${formatUSD(seedsToUSD(initQty, crop.seedCost))}</span></button>
         </div>`;
       }
       return `<div class="${classes}" onclick="toggleShopCard('${crop.id}')">${mainRow}${qtyPicker}</div>`;
@@ -519,7 +681,7 @@ export function renderShop() {
       const theme = CROP_THEME[crop.id]||{bg:'#1A1A1A',border:'rgba(255,255,255,0.2)'};
       const expanded = G.shopExpanded===crop.id;
       const stockBadge = inInventory>0 ? `<span style="font-size:9px;background:rgba(255,215,0,0.2);color:#FFD700;border-radius:6px;padding:1px 4px;margin-left:3px;font-weight:800">×${inInventory}</span>` : '';
-      const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px;box-shadow:0 0 6px ${theme.border}">${cropArt(crop.id)}</svg>`;
+      const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:6px;box-shadow:0 0 6px ${theme.border}">${cropArtWithPrestige(crop.id, G.prestige)}</svg>`;
       let qtyPicker = expanded ? `<div style="padding:6px 0 2px;font-size:11px;color:var(--text-dim);text-align:center">${inInventory>0?'Seeds obtained via Wandering Merchant only':'No seeds — find the Wandering Merchant!'}</div>` : '';
       return `<div class="crop-card${expanded?' expanded':''}" onclick="toggleShopCard('${crop.id}')" style="border-color:${theme.border}">
         <div class="crop-card-main" style="display:flex;align-items:center;gap:7px">
@@ -629,7 +791,7 @@ export function renderCropsTab(earned) {
   CROPS.forEach(crop => {
     const count = G.cropHarvests[crop.id] || 0;
     const theme = CROP_THEME[crop.id] || { bg:'#1A1A1A' };
-    const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:7px">${cropArt(crop.id)}</svg>`;
+    const artSvg = `<svg width="36" height="36" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="background:${theme.bg};border-radius:7px">${cropArtWithPrestige(crop.id, G.prestige)}</svg>`;
     const badges = CROP_MILESTONES.map(m => {
       const achId = 'crop_'+crop.id+'_'+m.key;
       const isEarned = earned.has(achId);

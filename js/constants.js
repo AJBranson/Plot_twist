@@ -84,6 +84,9 @@ export const MERCHANT_DURATION = 3 * 60 * 1000;
 export const MERCHANT_MIN_GAP  = 10 * 60 * 1000;
 export const MERCHANT_MAX_GAP  = 15 * 60 * 1000;
 
+export const MISHAP_INSURANCE_COST   = 500;
+export const MISHAP_INSURANCE_SECS   = 30 * 60;
+
 // NOTE: Callbacks access game state via window.G, window.notify, etc.
 // These are set up by main.js after initialization.
 export const MERCHANT_DEALS = [
@@ -212,6 +215,7 @@ export const MERCHANT_DEALS = [
 export const RANDOM_EVENTS = [
   {
     id: 'aphids', icon: '🐛', title: 'Aphid Outbreak!',
+    soundKind: 'negative',
     desc: 'A swarm of aphids is attacking your crops! Spend {cost} coins on pesticide to protect your harvest, or risk losing 20% yield on your next harvest.',
     cost: (lvl) => Math.max(2, lvl * 2),
     fixLabel: (cost) => 'Spray (🪙' + cost + ')',
@@ -221,6 +225,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'rain', icon: '🌧️', title: 'Surprise Rain!',
+    soundKind: 'positive',
     desc: 'A warm summer shower rolls through! All growing crops get a 15% speed boost — no action needed.',
     cost: () => 0,
     fixLabel: () => 'Great!',
@@ -243,6 +248,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'crow', icon: '🐦', title: 'Crows in the Storage!',
+    soundKind: 'negative',
     desc: 'A flock of crows has raided your seed storage and stolen some seeds! Spend {cost} coins on a scarecrow to protect the rest, or lose {steal} seeds.',
     cost: (lvl) => Math.max(3, Math.floor(lvl * 1.5)),
     fixLabel: (cost) => 'Scarecrow (🪙' + cost + ')',
@@ -264,6 +270,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'sun', icon: '☀️', title: 'Bumper Sun Day!',
+    soundKind: 'positive',
     desc: 'The sun is blazing! Your next harvest will earn +25% bonus coins. No action needed — enjoy the warmth!',
     cost: () => 0,
     fixLabel: () => 'Wonderful!',
@@ -273,6 +280,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'rabbit', icon: '🐇', title: 'Rabbit on the Loose!',
+    soundKind: 'negative',
     desc: 'A hungry rabbit has hopped into your farm. Pay {cost} coins to shoo it away, or it will delay one of your crops by 30 seconds.',
     cost: (lvl) => Math.max(2, lvl),
     fixLabel: (cost) => 'Shoo it! (🪙' + cost + ')',
@@ -290,6 +298,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'bees', icon: '🐝', title: 'Wild Bee Swarm!',
+    soundKind: 'positive',
     desc: 'A wild bee colony has settled nearby and is pollinating your crops! All growing crops finish 20% faster. No action needed!',
     cost: () => 0,
     fixLabel: () => 'Buzz-tastic!',
@@ -312,11 +321,13 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'mishap_weevil', icon: '🐛', title: 'Seed Weevil Infestation!',
+    soundKind: 'negative',
     desc: 'Weevils have got into your exotic seed-bearing plots! Pay {cost} coins to fumigate or risk losing your oldest seeding plot\'s seeds.',
     cost: () => Math.max(10, (window.getSeedingPlotsAtRisk ? window.getSeedingPlotsAtRisk().length : 0) * 8),
     fixLabel: (cost) => `Fumigate (🪙${cost})`,
     onFix: () => { window.G._exoticMishapsFix = (window.G._exoticMishapsFix || 0) + 1; window.notify('🐛 Weevils fumigated! Exotic seeds safe.', 'harvest'); },
     onIgnore: () => {
+      if (window.isMishapInsured && window.isMishapInsured()) { window.notify('🛡️ Mishap Insurance absorbed the weevil damage!', 'unlock'); return; }
       const roll = Math.random();
       if (roll < 0.05) { window.applyMishapTotal && window.applyMishapTotal(); }
       else if (roll < 0.25) { window.applyMishapPartial && window.applyMishapPartial(); }
@@ -326,11 +337,13 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'mishap_frost', icon: '❄️', title: 'Late Frost Warning!',
+    soundKind: 'negative',
     desc: 'An unexpected frost threatens your seed-bearing exotic crops! Pay {cost} coins to cover them or risk losing your oldest seeding plot\'s seeds.',
     cost: () => Math.max(10, (window.getSeedingPlotsAtRisk ? window.getSeedingPlotsAtRisk().length : 0) * 8),
     fixLabel: (cost) => `Cover crops (🪙${cost})`,
     onFix: () => { window.G._exoticMishapsFix = (window.G._exoticMishapsFix || 0) + 1; window.notify('❄️ Crops covered in time! Seeds protected.', 'harvest'); },
     onIgnore: () => {
+      if (window.isMishapInsured && window.isMishapInsured()) { window.notify('🛡️ Mishap Insurance absorbed the frost damage!', 'unlock'); return; }
       const roll = Math.random();
       if (roll < 0.05) { window.applyMishapTotal && window.applyMishapTotal(); }
       else if (roll < 0.25) { window.applyMishapPartial && window.applyMishapPartial(); }
@@ -340,6 +353,7 @@ export const RANDOM_EVENTS = [
   },
   {
     id: 'mishap_wind', icon: '💨', title: 'Strange Wind Rattles the Seed Heads!',
+    soundKind: 'positive',
     desc: 'A sudden gust swept across your farm — luckily no seeds were lost this time. Nothing to pay; just a close call.',
     cost: () => 0,
     fixLabel: () => 'Phew!',

@@ -11,6 +11,19 @@ const METANET_BROADCAST_URL = 'https://api.metanet.ninja/data/api';
 const BSV_PAYMENT_SOURCE = 'plot-twist';
 const ecInstance = new EC('secp256k1');
 
+function extractTxid(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const txid = extractTxid(item);
+      if (txid) return txid;
+    }
+    return null;
+  }
+  return value.txid || value.txId || value.txID || value.transactionId || value.transactionID || value.hash || null;
+}
+
 function notifyPayment(message, type = 'info') {
   if (window.notify) window.notify(message, type);
   else console.log('[bsv-payment]', message);
@@ -83,13 +96,19 @@ async function broadcastRawTransaction(rawTxHex) {
     throw new Error(first?.error?.message || first?.error || 'Transaction was not accepted for broadcast.');
   }
 
+  const txid = extractTxid(first) || extractTxid(result.data) || extractTxid(result);
+  if (!txid) {
+    console.warn('Broadcast response did not include a transaction id:', result);
+    throw new Error('Broadcast completed without a transaction id. Purchase was not finalized.');
+  }
+
   return {
-    txid: first.txid || null,
+    txid,
     result,
   };
 }
 
-export async function requestBSVPayment({ ref, recipients, pendingMessage = '₿ Awaiting wallet confirmation…' }) {
+export async function requestBSVPayment({ ref, recipients, pendingMessage = 'Awaiting wallet confirmation…' }) {
   if (!window.platformSDK || !G?.walletConnected) {
     throw new Error('Wallet not available in this environment.');
   }
@@ -107,11 +126,23 @@ export async function requestBSVPayment({ ref, recipients, pendingMessage = '₿
   if (!payload.success) {
     throw new Error(payload.message || 'Payment failed.');
   }
+
+  const directTxid = extractTxid(payload);
+  if (directTxid) {
+    notifyPayment('Wallet payment broadcast by SDK.', 'harvest');
+    return {
+      payment: payload,
+      broadcast: {
+        txid: directTxid,
+        result: payload,
+      },
+    };
+  }
   if (!payload.rawTxHex) {
     throw new Error('Payment succeeded but no signed transaction was returned.');
   }
 
-  notifyPayment('₿ Payment signed. Broadcasting transaction…', 'harvest');
+  notifyPayment('Wallet payment signed. Broadcasting transaction…', 'harvest');
   const broadcast = await broadcastRawTransaction(payload.rawTxHex);
   return {
     payment: payload,

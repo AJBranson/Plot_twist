@@ -12,27 +12,32 @@ import { G, loadGame, saveGame, DEFAULT_STATE, setUIHandlers, scheduleNextEvent,
          acceptMerchantDeal, dismissMerchant } from './game-state.js';
 import { connectWallet, disconnectWallet } from './wallet.js';
 import { buildAllAchievements, checkAchievements } from './achievements.js';
-import { cropArt, CROP_THEME, wateringCanCharge, getLevelData, checkLevelUp } from './utils.js';
+import { initSound, toggleSound } from './sound.js';
+import { cropArt, cropArtWithPrestige, CROP_THEME, wateringCanCharge, getLevelData, checkLevelUp } from './utils.js';
 
 import {
   renderAll, renderPlots, renderPlotsOnly, renderStorage, renderShop, renderCompost,
-  renderHeading, renderWateringCan, notify, shakeStat, showFloatLabel,
+  renderHeading, renderWateringCan, renderMishapInsurance, renderSpeedBoost, notify, shakeStat, showFloatLabel,
   openJournal, closeJournal, showJTab, closeConfirm, showConfirm, showSaveConflictChoice,
 } from './rendering.js';
 
 import {
   toggleShopCard, shopChangeQty, buySeeds, buySeedsBSV,
   clearSelectedCrop, selectFromStorage, tryPlant, tryUnlockPlot,
-  unlockPlotBSV, harvestCrop, useWateringCan, toggleFertiliseMode,
+  unlockPlotBSV, buyCompostBSV, harvestCrop, useWateringCan, toggleFertiliseMode,
   applyFertiliser, startSeedSaving, collectSeeds, showHarvestFork,
   doPrestige, startEditName, resolveEvent, applyMishapPartial, applyMishapTotal,
-  getSeedingPlotsAtRisk,
+  getSeedingPlotsAtRisk, buyMishapInsurance, isMishapInsured, buySpeedBoost,
 } from './game.js';
 
 import { lbShareScore } from './leaderboard.js';
 import { setMarketFilter, setMarketSort, refreshMarket, executePurchase,
          listSeeds, cancelListing, showBuyConfirm, openVegeStand,
          toggleStandOpen, showListingModal, updateListingModal, changeListingQty, confirmListing } from './marketplace.js';
+import { spinDailyWheel, closeDailyWheel, scheduleDailyWheel } from './daily-wheel.js';
+
+const BUILD_ID = '2026-04-09-usd_pricing_v2';  // increment for each prod build, used for cache-busting and save compatibility checks
+const EMBEDDED_RUNTIME = window.parent !== window || !!window.platformSDK;
 
 // ── Expose window globals ─────────────────────────────────
 // Rendering helpers (used by game.js via window.*)
@@ -44,10 +49,12 @@ window.renderShop      = renderShop;
 window.renderCompost   = renderCompost;
 window.renderHeading   = renderHeading;
 window.renderWateringCan = renderWateringCan;
+window.renderSpeedBoost = renderSpeedBoost;
 window.shakeStat       = shakeStat;
 window.showFloatLabel  = showFloatLabel;
 window.showConfirm     = showConfirm;
 window.closeConfirm    = closeConfirm;
+window.toggleSound     = toggleSound;
 
 // Game state
 window.G               = null;   // set after loadGame below
@@ -57,6 +64,7 @@ window.checkLevelUp    = checkLevelUp;
 
 // Crop art helpers (used by game.js for harvest-fork overlay)
 window._cropArt        = cropArt;
+window._cropArtWithPrestige = cropArtWithPrestige;
 window._CROP_THEME     = CROP_THEME;
 window._wateringCanCharge = wateringCanCharge;
 
@@ -81,6 +89,7 @@ window.selectFromStorage = selectFromStorage;
 window.tryPlant          = tryPlant;
 window.tryUnlockPlot     = tryUnlockPlot;
 window.unlockPlotBSV     = unlockPlotBSV;
+window.buyCompostBSV     = buyCompostBSV;
 
 // Harvest / farm
 window.harvestCrop       = harvestCrop;
@@ -98,6 +107,9 @@ window.showHarvestFork   = showHarvestFork;
 window.applyMishapPartial = applyMishapPartial;
 window.applyMishapTotal   = applyMishapTotal;
 window.getSeedingPlotsAtRisk = getSeedingPlotsAtRisk;
+window.buyMishapInsurance = buyMishapInsurance;
+window.isMishapInsured = isMishapInsured;
+window.buySpeedBoost = buySpeedBoost;
 
 // Merchant / events
 window.acceptMerchantDeal = acceptMerchantDeal;
@@ -120,8 +132,21 @@ window.showListingModal   = showListingModal;
 window.updateListingModal = updateListingModal;
 window.changeListingQty   = changeListingQty;
 window.confirmListing     = confirmListing;
+
+// Daily wheel
+window.spinDailyWheel     = spinDailyWheel;
+window.closeDailyWheel    = closeDailyWheel;
 // ── Initialization ────────────────────────────────────────
 function init() {
+  window.PLOT_TWIST_BUILD = BUILD_ID;
+  window.PLOT_TWIST_EMBEDDED = EMBEDDED_RUNTIME;
+  console.info('[Plot Twist] Build', BUILD_ID);
+  console.info('[Plot Twist] Embedded runtime', EMBEDDED_RUNTIME);
+
+  document.body.classList.toggle('embedded-runtime', EMBEDDED_RUNTIME);
+
+  initSound();
+
   // Wire deferred UI handlers (breaks circular game-state ↔ rendering)
   setUIHandlers(notify, renderAll, renderPlots, checkAchievements, showSaveConflictChoice);
 
@@ -160,6 +185,8 @@ function init() {
   scheduleNextMerchant();
   restoreMerchantIfActive();
 
+  scheduleDailyWheel();
+
   // ── Keyboard shortcuts ──────────────────────────────────
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
@@ -167,6 +194,7 @@ function init() {
       document.getElementById('event-overlay')?.classList.add('hidden');
       document.getElementById('confirm-overlay')?.classList.add('hidden');
       document.getElementById('harvest-fork-overlay')?.remove();
+      document.getElementById('wheel-overlay')?.classList.add('hidden');
       if (G.fertiliseMode) {
         G.fertiliseMode = false;
         renderPlots();
@@ -201,15 +229,29 @@ function init() {
     if (overlay) { overlay.remove(); window._pendingBuyListing = null; }
   });
 
-  // ── Game tick (1 s) ─────────────────────────────────────
-  setInterval(() => {
-    if (!G) return;   // guard: G not yet initialized
-    window.G = G;     // keep window.G in sync with module-level G
-    tick();
-    renderPlotsOnly();
-    renderWateringCan();
-    renderCompost();
-  }, 1000);
+  // ── Game tick (3.3 s normal, 0.33 s with speed boost) ────
+  let _tickInterval = null;
+
+  function startTick() {
+    if (_tickInterval) clearInterval(_tickInterval);
+    const ms = G._speedBoostExpiry > Date.now() ? 330 : 3300;
+    _tickInterval = setInterval(() => {
+      if (!G) return;
+      window.G = G;
+      const changed = tick();
+      if (!changed) {
+        if (EMBEDDED_RUNTIME) renderPlots();
+        else renderPlotsOnly();
+        renderWateringCan();
+        renderCompost();
+        renderMishapInsurance();
+        renderSpeedBoost();
+      }
+    }, ms);
+  }
+
+  window._restartTick = startTick;
+  startTick();
 }
 
 init();

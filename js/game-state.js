@@ -6,6 +6,7 @@ import { SAVE_KEY, GUEST_SAVE_KEY, COMPOST_MAX_CHARGES, CROP_MAP, EVENT_MIN_GAP,
          MERCHANT_MIN_GAP, MERCHANT_MAX_GAP, MERCHANT_DURATION, MERCHANT_DEALS } from './constants.js';
 import { getLevelData, checkLevelUp, formatTime } from './utils.js';
 import { fetchCloudSave, getWalletCacheKey, isCloudSaveAvailable, upsertCloudSave } from './cloud-save.js';
+import { playEventSound, playMerchantDealSound } from './sound.js';
 
 // ── Deferred UI handlers (avoids circular imports) ──────────
 let _notifyFn = null;
@@ -111,6 +112,10 @@ export const DEFAULT_STATE = {
   _exoticNearMisses: 0,
   _heritageCollected: 0,
   standUnlocked: false,
+  _mishapInsuranceExpiry: 0,
+  _speedBoostExpiry: 0,
+  firstPlayedAt: 0,
+  lastDailyWheelSpin: 0,
 };
 
 export function hasUnlockedVegeStand() {
@@ -259,7 +264,11 @@ function buildSaveData(state = G) {
     standEnabled: state.standEnabled !== false,
     standUnlocked: state.standUnlocked !== false,
     standMaxSlots: state.standMaxSlots || 3,
-  };
+  _mishapInsuranceExpiry: state._mishapInsuranceExpiry || 0,
+  _speedBoostExpiry: state._speedBoostExpiry || 0,
+  firstPlayedAt: state.firstPlayedAt || 0,
+  lastDailyWheelSpin: state.lastDailyWheelSpin || 0,
+};
 }
 
 function applySaveData(saved, { walletConnected = false, walletAddress = null } = {}) {
@@ -267,6 +276,7 @@ function applySaveData(saved, { walletConnected = false, walletAddress = null } 
   if (!saved) {
     next.walletConnected = walletConnected;
     next.walletAddress = walletAddress;
+    next.firstPlayedAt = Date.now();
     G = next;
     syncPersonalBestScore({ notifyOnChange: false, queueEffects: false });
     return G;
@@ -307,7 +317,13 @@ function applySaveData(saved, { walletConnected = false, walletAddress = null } 
   next.standEnabled = saved.standEnabled !== false;
   next.standUnlocked = saved.standUnlocked !== false;
   next.standMaxSlots = Number.isInteger(saved.standMaxSlots) ? saved.standMaxSlots : 3;
+  next._mishapInsuranceExpiry = saved._mishapInsuranceExpiry || 0;
+  next._speedBoostExpiry = saved._speedBoostExpiry || 0;
+  next.firstPlayedAt = saved.firstPlayedAt || 0;
+  next.lastDailyWheelSpin = saved.lastDailyWheelSpin || 0;
   next.fertiliseMode = false;
+
+  if (!next.firstPlayedAt) next.firstPlayedAt = Date.now();
 
   if (Array.isArray(saved.plots)) {
     saved.plots.forEach((sp, i) => {
@@ -613,8 +629,10 @@ export function tick() {
       saveGame();
       renderAll();
     }
+    return changed;
   } catch(e) {
     console.error('Game tick error:', e);
+    return false;
   }
 }
 
@@ -660,8 +678,16 @@ function showEventModal(ev) {
   }
   btns.innerHTML = html;
   document.getElementById('event-overlay').classList.remove('hidden');
+  playEventSound(ev.soundKind === 'positive' ? 'positive' : 'negative');
   G._eventsEncountered = (G._eventsEncountered || 0) + 1;
   window._currentEvent = { ev, cost };
+
+  clearTimeout(window._eventTimeout);
+  window._eventTimeout = setTimeout(() => {
+    if (window._currentEvent) {
+      resolveEvent(false);
+    }
+  }, 30000);
 }
 
 // ============================================================
@@ -710,6 +736,7 @@ function spawnMerchant() {
   dealBtn.textContent = deal.btnText;
   dealBtn.disabled = !deal.canAfford();
   document.getElementById('merchant-banner').classList.remove('hidden');
+  playEventSound('merchant');
   saveGame();
   scheduleNextMerchant();
 }
@@ -722,6 +749,7 @@ export function acceptMerchantDeal() {
   }
   G._merchantDealsAccepted = (G._merchantDealsAccepted || 0) + 1;
   window._merchantExecute();
+  playMerchantDealSound();
   window._merchantExecute = null;
   window._merchantCanAfford = null;
   G.merchantActive = false;
